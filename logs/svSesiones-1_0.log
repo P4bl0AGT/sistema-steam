@@ -1,0 +1,156 @@
+[2026-05-11 13:12:27.872] [Mon May 11 13:12:27 GMT-04:00 2026] [INFO] svSesiones-1════════════════════════════════════
+  Componente  : svSesiones-1
+  Log archivo : logs/svSesiones-1_0.log
+════════════════════════════════════
+[2026-05-11 13:12:27.984] [Mon May 11 13:12:27 GMT-04:00 2026] [INFO] svSesiones-1=== svSesiones iniciado en puerto 8081 ===
+[2026-05-11 13:13:57.920] [INFO   ] [svSesiones-1] ════════════════════════════════════
+  Componente  : svSesiones-1
+  Log archivo : logs/svSesiones-1_0.log
+════════════════════════════════════
+[2026-05-11 13:13:58.003] [INFO   ] [svSesiones-1] === svSesiones iniciado en puerto 8081 ===
+[2026-05-11 13:15:35.756] [INFO   ] [svSesiones-1] ════════════════════════════════════
+  Componente  : svSesiones-1
+  Log archivo : logs/svSesiones-1_0.log
+════════════════════════════════════
+[2026-05-11 13:15:35.841] [INFO   ] [svSesiones-1] === svSesiones iniciado en puerto 8081 ===
+[2026-05-11 13:17:27.941] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:17:35.064] [INFO   ] [svSesiones-1] [SES] op=LOGIN rId=8f9fb7c9-af42-4095-9e0d-e1b30e54832d
+[2026-05-11 13:17:43.116] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:17:58.136] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:18:13.154] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:18:23.173] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:18:33.227] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:18:43.260] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:18:53.324] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:19:03.346] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:19:13.365] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:19:13.532] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=d728f2d1-d85d-4e67-a972-386c16160aa5
+[2026-05-11 13:19:21.011] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=b4e5935d-a9c4-4823-82a1-82ccbfeaae13
+[2026-05-11 13:19:23.384] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:19:25.676] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=2b11a58f-b231-49c5-aee1-095041198e64
+[2026-05-11 13:19:27.285] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=87057466-5bbb-459d-bbc2-eabc8adc3506
+[2026-05-11 13:19:29.498] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=9ddb3783-a16f-47ec-b796-98ebfeff3fac
+[2026-05-11 13:19:31.452] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=352a97a8-faf6-48c4-9910-c3e84ce8ec82
+[2026-05-11 13:19:33.404] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:19:34.237] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=2361a266-6cec-4fdc-b00f-ad842baf80d6
+[2026-05-11 13:19:42.173] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=51d284bc-5236-488b-90ad-45f82aa3a4f3
+[2026-05-11 13:19:43.424] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:19:53.442] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:20:03.462] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:20:13.481] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:20:23.498] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:20:33.517] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:20:43.538] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:20:53.558] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:21:03.576] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:21:13.594] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:21:23.613] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:21:33.629] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:21:43.646] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:21:53.661] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:22:03.678] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:22:13.694] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:22:15.106] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=c1914e6c-358d-4db4-b59d-8dc0b4490b44
+[2026-05-11 13:22:21.035] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=14fd2d12-74de-4ec2-81ab-c5843367322f
+[2026-05-11 13:22:23.709] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:22:33.545] [INFO   ] [svSesiones-1] [SES] op=LOGIN rId=0d594c56-cf91-4a8c-a192-c862668d2a20
+[2026-05-11 13:22:33.725] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:22:43.739] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:22:51.186] [INFO   ] [svSesiones-1] [SES] op=LISTAR_USUARIOS rId=48388196-a8ca-4c8c-8bd6-61e03c43eb63
+[2026-05-11 13:22:53.754] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:22:55.108] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=d497c098-7450-4e05-a63d-9b64cbafd279
+[2026-05-11 13:22:58.061] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=91ac68c0-5b49-4f22-aeb5-6cb5313b58c4
+[2026-05-11 13:23:03.768] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:23:10.008] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=92e33db5-d936-42a4-b0cb-84ae33b6d3d2
+[2026-05-11 13:23:13.784] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:23:23.797] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:23:24.525] [INFO   ] [svSesiones-1] [SES] op=LOGIN rId=e1642ae7-0a95-4215-8fea-731fa9ccb6e1
+[2026-05-11 13:23:28.732] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=c64e12fa-0030-4f12-9b16-080532f7db3c
+[2026-05-11 13:23:33.812] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:23:43.825] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:23:52.338] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=845cb7f1-6ad3-429a-b1fc-aa5969a489a3
+[2026-05-11 13:23:53.838] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:24:03.852] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:24:13.865] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:24:19.472] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=8fcd56c6-0a99-4cb6-9218-0e0804bc2562
+[2026-05-11 13:24:23.880] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:24:33.893] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:24:43.906] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:24:53.920] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:25:03.934] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:25:13.947] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:25:23.959] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:25:33.971] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:25:38.996] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=4c178363-237e-40f3-a87c-151bdba13341
+[2026-05-11 13:25:43.984] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:25:53.997] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:26:04.017] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:26:14.034] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:26:24.047] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:26:34.061] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:26:44.088] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:26:54.109] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:27:04.133] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:27:14.155] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:27:24.168] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:27:34.182] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:27:54.224] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:28:14.239] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:28:34.253] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:28:54.267] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=e4537e29-7fb6-46c5-8713-f64b46b11756
+[2026-05-11 13:28:59.240] [INFO   ] [svSesiones-1] ════════════════════════════════════
+  Componente  : svSesiones-1
+  Log archivo : logs/svSesiones-1_0.log
+════════════════════════════════════
+[2026-05-11 13:28:59.319] [INFO   ] [svSesiones-1] === svSesiones iniciado en puerto 8081 ===
+[2026-05-11 13:29:13.848] [INFO   ] [svSesiones-1] ════════════════════════════════════
+  Componente  : svSesiones-1
+  Log archivo : logs/svSesiones-1_0.log
+════════════════════════════════════
+[2026-05-11 13:29:13.923] [INFO   ] [svSesiones-1] === svSesiones iniciado en puerto 8081 ===
+[2026-05-11 13:29:35.569] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=fdd0153b-469d-4459-93bc-a04c7e75268e
+[2026-05-11 13:29:37.669] [INFO   ] [svSesiones-1] [SES] op=LOGIN rId=ade5299b-3250-4285-a5bf-c4b5b0f40747
+[2026-05-11 13:29:50.592] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=fdd0153b-469d-4459-93bc-a04c7e75268e
+[2026-05-11 13:30:05.611] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=fdd0153b-469d-4459-93bc-a04c7e75268e
+[2026-05-11 13:30:11.200] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=615d3912-8013-4b8c-b92c-a25e01141653
+[2026-05-11 13:30:17.492] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=66f57156-a84f-4efa-91e4-9f5e9ccc841b
+[2026-05-11 13:30:20.625] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=fdd0153b-469d-4459-93bc-a04c7e75268e
+[2026-05-11 13:30:24.425] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=f02e88f7-976f-483c-9b5f-8a15cac20dc8
+[2026-05-11 13:30:29.892] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=b793895a-f888-48d2-bb78-2183256d7fa9
+[2026-05-11 13:30:33.883] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=994faa83-9e37-4723-8b1f-893db98e59f0
+[2026-05-11 13:30:35.641] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=fdd0153b-469d-4459-93bc-a04c7e75268e
+[2026-05-11 13:30:37.059] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=fb8f3087-6e10-41c7-ba05-b16b125839d7
+[2026-05-11 13:30:50.655] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=fdd0153b-469d-4459-93bc-a04c7e75268e
+[2026-05-11 13:31:05.668] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=fdd0153b-469d-4459-93bc-a04c7e75268e
+[2026-05-11 13:31:20.682] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=fdd0153b-469d-4459-93bc-a04c7e75268e
+[2026-05-11 13:31:35.720] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=fdd0153b-469d-4459-93bc-a04c7e75268e
+[2026-05-11 13:31:50.733] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=fdd0153b-469d-4459-93bc-a04c7e75268e
+[2026-05-11 13:32:05.748] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=fdd0153b-469d-4459-93bc-a04c7e75268e
+[2026-05-11 13:32:20.762] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=fdd0153b-469d-4459-93bc-a04c7e75268e
+[2026-05-11 13:33:36.404] [INFO   ] [svSesiones-1] ════════════════════════════════════
+  Componente  : svSesiones-1
+  Log archivo : logs/svSesiones-1_0.log
+════════════════════════════════════
+[2026-05-11 13:33:36.482] [INFO   ] [svSesiones-1] === svSesiones iniciado en puerto 8081 ===
+[2026-05-11 13:34:10.999] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
+[2026-05-11 13:34:26.617] [INFO   ] [svSesiones-1] ════════════════════════════════════
+  Componente  : svSesiones-1
+  Log archivo : logs/svSesiones-1_0.log
+════════════════════════════════════
+[2026-05-11 13:34:26.696] [INFO   ] [svSesiones-1] === svSesiones iniciado en puerto 8081 ===
+[2026-05-11 13:34:36.034] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
+[2026-05-11 13:34:42.094] [INFO   ] [svSesiones-1] [SES] op=LOGIN rId=d49977d8-fc3e-44fd-9a9c-e61b6a075915
+[2026-05-11 13:34:46.052] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
+[2026-05-11 13:34:56.064] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
+[2026-05-11 13:35:06.079] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
+[2026-05-11 13:35:16.092] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
+[2026-05-11 13:35:21.029] [INFO   ] [svSesiones-1] [SES] op=REGISTRAR_USUARIO rId=fd393849-ad0b-47e1-b8b6-0ab2451422e3
+[2026-05-11 13:35:24.518] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=c13a8896-8e19-4c29-8188-a0d40b91988d
+[2026-05-11 13:35:26.104] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
+[2026-05-11 13:35:36.117] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
+[2026-05-11 13:35:46.130] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
+[2026-05-11 13:35:55.135] [INFO   ] [svSesiones-1] [SES] op=VALIDAR_TOKEN rId=58aa687e-2f5b-402a-bc7f-948239c9778c
+[2026-05-11 13:35:56.144] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
+[2026-05-11 13:36:06.156] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
+[2026-05-11 13:36:16.168] [INFO   ] [svSesiones-1] [SES] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
+[2026-05-11 13:36:19.518] [INFO   ] [svSesiones-1] [SES] op=LOGOUT rId=be096a7f-4478-4c10-bf10-25e58a92bf43

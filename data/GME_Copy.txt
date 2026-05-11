@@ -1,0 +1,170 @@
+{
+  "catalogo": [
+    {
+      "id": "58cd05b0-d233-45b3-87a4-fbf6cc73b98b",
+      "nombre": "Counter-Strike 2",
+      "descripcion": "FPS táctico multijugador",
+      "precio": 29.99,
+      "stock": 49,
+      "stockOriginal": 50,
+      "vendedor": "vendedor1",
+      "activo": true,
+      "creadoEn": 1778518826963,
+      "totalVentas": 1
+    },
+    {
+      "id": "c850ae27-bcf5-4bde-b103-1b29ca7f51a4",
+      "nombre": "Cyberpunk 2077",
+      "descripcion": "RPG de mundo abierto futurista",
+      "precio": 59.99,
+      "stock": 19,
+      "stockOriginal": 20,
+      "vendedor": "vendedor1",
+      "activo": true,
+      "creadoEn": 1778518826963,
+      "totalVentas": 1
+    },
+    {
+      "id": "c4663261-b0ae-4521-af89-836fc921e4f4",
+      "nombre": "Stardew Valley",
+      "descripcion": "Simulador de granja relajante",
+      "precio": 50.0,
+      "stock": 99,
+      "stockOriginal": 100,
+      "vendedor": "vendedor1",
+      "activo": true,
+      "creadoEn": 1778518826963,
+      "totalVentas": 1
+    },
+    {
+      "id": "805ed77c-3a5b-44cd-8b98-00b7eb7ce508",
+      "nombre": "Rocketo",
+      "descripcion": "Juego ultra divertido de coches voladores",
+      "precio": 10.0,
+      "stock": 99,
+      "stockOriginal": 100,
+      "vendedor": "vendedor1",
+      "activo": false,
+      "creadoEn": 1778519183653,
+      "totalVentas": 1
+    },
+    {
+      "id": "06cb463a-e841-4ee8-842c-7c0ef82dc05f",
+      "nombre": "Minecraft",
+      "descripcion": "juego de cubitos",
+      "precio": 10.0,
+      "stock": 175,
+      "stockOriginal": 175,
+      "vendedor": "vendedor1",
+      "activo": true,
+      "creadoEn": 1778520232348,
+      "totalVentas": 0
+    }
+  ],
+  "reservas": [
+    {
+      "reservaId": "50a9ecde-8b82-4c29-99ad-db2dd7013e80",
+      "juegoId": "58cd05b0-d233-45b3-87a4-fbf6cc73b98b",
+      "juegoNombre": "Counter-Strike 2",
+      "username": "cliente1",
+      "precio": 29.99,
+      "creadoEn": 1778518902231,
+      "expiraEn": 1778519202231,
+      "activa": false
+    },
+    {
+      "reservaId": "bae45bbd-6c2b-467b-a82b-5d91bca36b5d",
+      "juegoId": "c4663261-b0ae-4521-af89-836fc921e4f4",
+      "juegoNombre": "Stardew Valley",
+      "username": "cliente2",
+      "precio": 14.99,
+      "creadoEn": 1778519000298,
+      "expiraEn": 1778519300298,
+      "activa": false
+    },
+    {
+      "reservaId": "9ee632f4-3cd8-4384-8633-aa1fd38cec94",
+      "juegoId": "805ed77c-3a5b-44cd-8b98-00b7eb7ce508",
+      "juegoNombre": "Rocketo",
+      "username": "cliente1",
+      "precio": 10.0,
+      "creadoEn": 1778519281010,
+      "expiraEn": 1778519581010,
+      "activa": false
+    },
+    {
+      "reservaId": "f7479215-90df-4369-bac3-0ad2e87e0c6a",
+      "juegoId": "c850ae27-bcf5-4bde-b103-1b29ca7f51a4",
+      "juegoNombre": "Cyberpunk 2077",
+      "username": "cliente1",
+      "precio": 59.99,
+      "creadoEn": 1778519961019,
+      "expiraEn": 1778520261019,
+      "activa": false
+    },
+    {
+      "reservaId": "10338473-3acc-41e3-833d-670dcda01234",
+      "juegoId": "c850ae27-bcf5-4bde-b103-1b29ca7f51a4",
+      "juegoNombre": "Cyberpunk 2077",
+      "username": "cliente1",
+      "precio": 59.99,
+      "creadoEn": 1778520611210,
+      "expiraEn": 1778520911210,
+      "activa": false
+    },
+    {
+      "reservaId": "d5727eac-52d6-4fa6-b361-3ca70fad1d60",
+      "juegoId": "c4663261-b0ae-4521-af89-836fc921e4f4",
+      "juegoNombre": "Stardew Valley",
+      "username": "cliente1",
+      "precio": 50.0,
+      "creadoEn": 1778520629900,
+      "expiraEn": 1778520929900,
+      "activa": false
+    }
+  ],
+  "ventas": [
+    {
+      "ventaId": "c2799458-857d-45fe-a040-ca2b12323845",
+      "juegoId": "58cd05b0-d233-45b3-87a4-fbf6cc73b98b",
+      "juegoNombre": "Counter-Strike 2",
+      "comprador": "cliente1",
+      "vendedor": "vendedor1",
+      "precio": 29.99,
+      "timestamp": 1778518903903
+    },
+    {
+      "ventaId": "3ba00191-4f77-4702-bd8a-514afb85ca9f",
+      "juegoId": "c4663261-b0ae-4521-af89-836fc921e4f4",
+      "juegoNombre": "Stardew Valley",
+      "comprador": "cliente2",
+      "vendedor": "vendedor1",
+      "precio": 14.99,
+      "timestamp": 1778519009105
+    },
+    {
+      "ventaId": "a0bfaf0e-090e-4f92-b4fb-82098b4d9831",
+      "juegoId": "805ed77c-3a5b-44cd-8b98-00b7eb7ce508",
+      "juegoNombre": "Rocketo",
+      "comprador": "cliente1",
+      "vendedor": "vendedor1",
+      "precio": 10.0,
+      "timestamp": 1778519283516
+    },
+    {
+      "ventaId": "d6497f06-c323-403d-b770-748cf03cd781",
+      "juegoId": "c850ae27-bcf5-4bde-b103-1b29ca7f51a4",
+      "juegoNombre": "Cyberpunk 2077",
+      "comprador": "cliente1",
+      "vendedor": "vendedor1",
+      "precio": 59.99,
+      "timestamp": 1778520624437
+    }
+  ],
+  "billeteras": {
+    "cliente1": 10400.02,
+    "cliente2": 185.01,
+    "vendedor1": 114.97,
+    "admin": 0.0
+  }
+}

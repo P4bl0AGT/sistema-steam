@@ -1,0 +1,121 @@
+{
+  "usuarios": [
+    {
+      "username": "admin",
+      "passwordHash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+      "rol": "ADMINISTRADOR",
+      "creadoEn": 1778518822251,
+      "activo": true
+    },
+    {
+      "username": "vendedor1",
+      "passwordHash": "9b8769a4a742959a2d0298c36fb70623f2dfacda8436237df08d8dfd5b37374c",
+      "rol": "VENDEDOR",
+      "creadoEn": 1778518822251,
+      "activo": true
+    },
+    {
+      "username": "cliente1",
+      "passwordHash": "9b8769a4a742959a2d0298c36fb70623f2dfacda8436237df08d8dfd5b37374c",
+      "rol": "COMPRADOR",
+      "creadoEn": 1778518822251,
+      "activo": true
+    },
+    {
+      "username": "cliente2",
+      "passwordHash": "9b8769a4a742959a2d0298c36fb70623f2dfacda8436237df08d8dfd5b37374c",
+      "rol": "COMPRADOR",
+      "creadoEn": 1778518822251,
+      "activo": true
+    },
+    {
+      "username": "hola",
+      "passwordHash": "b221d9dbb083a7f33428d7c2a3c3198ae925614d70210e28716ccaa7cd4ddb79",
+      "rol": "COMPRADOR",
+      "creadoEn": 1778520921039,
+      "activo": true
+    }
+  ],
+  "sesiones": [
+    {
+      "token": "feec08bb-49a8-4b30-84f1-4ff6b42b9029",
+      "username": "cliente1",
+      "rol": "COMPRADOR",
+      "creadoEn": 1778518893624,
+      "ultimaActividad": 1778518944687,
+      "activa": false
+    },
+    {
+      "token": "9d623753-d826-49c2-9859-afdcc4a0bae8",
+      "username": "cliente2",
+      "rol": "COMPRADOR",
+      "creadoEn": 1778518964059,
+      "ultimaActividad": 1778519032847,
+      "activa": false
+    },
+    {
+      "token": "3188f0eb-2371-4032-9e94-225c38400f4d",
+      "username": "admin",
+      "rol": "ADMINISTRADOR",
+      "creadoEn": 1778519050644,
+      "ultimaActividad": 1778519139315,
+      "activa": false
+    },
+    {
+      "token": "db4bcfc9-9769-4341-adf1-1bfd370bf456",
+      "username": "vendedor1",
+      "rol": "VENDEDOR",
+      "creadoEn": 1778519158857,
+      "ultimaActividad": 1778519193894,
+      "activa": false
+    },
+    {
+      "token": "95d1c6d5-c75f-425f-b01d-2574a04e3e30",
+      "username": "cliente1",
+      "rol": "COMPRADOR",
+      "creadoEn": 1778519200654,
+      "ultimaActividad": 1778519283508,
+      "activa": false
+    },
+    {
+      "token": "4bd96820-54ac-432a-9568-d995a2c89b16",
+      "username": "cliente1",
+      "rol": "COMPRADOR",
+      "creadoEn": 1778519855068,
+      "ultimaActividad": 1778520141036,
+      "activa": false
+    },
+    {
+      "token": "d6912cd7-43e6-46ed-995f-8d7198c3789b",
+      "username": "admin",
+      "rol": "ADMINISTRADOR",
+      "creadoEn": 1778520166816,
+      "ultimaActividad": 1778520190010,
+      "activa": false
+    },
+    {
+      "token": "2e075775-b1ec-4ba4-933b-f73e2491dee7",
+      "username": "vendedor1",
+      "rol": "VENDEDOR",
+      "creadoEn": 1778520204526,
+      "ultimaActividad": 1778520338997,
+      "activa": false
+    },
+    {
+      "token": "82c735aa-68bc-46c7-8334-d1f4b7e55813",
+      "username": "cliente1",
+      "rol": "COMPRADOR",
+      "creadoEn": 1778520577674,
+      "ultimaActividad": 1778520637060,
+      "activa": true
+    },
+    {
+      "token": "f2927cb0-305d-41e4-8d75-4630f51aff19",
+      "username": "admin",
+      "rol": "ADMINISTRADOR",
+      "creadoEn": 1778520882099,
+      "ultimaActividad": 1778520955136,
+      "activa": false
+    }
+  ]
+}

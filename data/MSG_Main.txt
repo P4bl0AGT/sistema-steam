@@ -1,0 +1,49 @@
+{
+  "mensajes": [
+    {
+      "id": "a854fe06-c8bc-492f-af18-89c4f45c2ce4",
+      "emisor": "cliente1",
+      "receptor": "cliente2",
+      "contenido": "Hola carlita",
+      "timestamp": 1778518938776,
+      "entregado": true,
+      "leido": true
+    },
+    {
+      "id": "6806dd4d-d7a7-4d6b-9ed6-641d6201bcd4",
+      "emisor": "cliente2",
+      "receptor": "cliente1",
+      "contenido": "hola daddy",
+      "timestamp": 1778519028104,
+      "entregado": true,
+      "leido": true
+    },
+    {
+      "id": "8fc24cca-04b4-40b0-9f21-8c706d9b1912",
+      "emisor": "admin",
+      "receptor": "cliente2",
+      "contenido": "estas baneado de este chat",
+      "timestamp": 1778519113824,
+      "entregado": false,
+      "leido": false
+    },
+    {
+      "id": "ac861e4c-eccf-4241-8c56-e9433bbab8c1",
+      "emisor": "cliente1",
+      "receptor": "cliente2",
+      "contenido": "hola daddy",
+      "timestamp": 1778519982180,
+      "entregado": false,
+      "leido": false
+    },
+    {
+      "id": "259e0122-11f9-4ca1-92ba-9fa71476e6e5",
+      "emisor": "admin",
+      "receptor": "cliente1",
+      "contenido": "hola carlita",
+      "timestamp": 1778520955143,
+      "entregado": false,
+      "leido": false
+    }
+  ]
+}
