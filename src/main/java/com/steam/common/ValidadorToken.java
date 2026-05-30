@@ -3,6 +3,8 @@ package com.steam.common;
 import java.io.*;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 /**
@@ -11,37 +13,65 @@ import java.util.logging.Logger;
  *
  * MODELO DE FALLOS: intenta svSesiones nodo 1 (8081) primero;
  * si no responde en TIMEOUT_MS, conmuta al nodo 2 (8181).
+ *
+ * CACHÉ IN-MEMORY (TTL 30 s):
+ * Cada llamada a validar() abría una nueva conexión TCP a svSesiones,
+ * sumando 1 conexión extra por cada operación de negocio. El caché
+ * elimina esa latencia para el caso frecuente (token recién validado).
+ * Tradeoff aceptado: un token invalidado por LOGOUT puede seguir siendo
+ * aceptado hasta 30 s; correcto para el contexto académico de este sistema.
  */
 public class ValidadorToken {
 
-    private static final Logger LOG = Logger.getLogger(ValidadorToken.class.getName());
+    private static final Logger LOG     = Logger.getLogger(ValidadorToken.class.getName());
+    private static final long   TTL_MS  = 30_000L; // 30 segundos
 
     /** Resultado de la validación */
     public record ResultadoValidacion(boolean valido, String username, String rol, String mensaje) {}
 
+    // ── Caché ─────────────────────────────────────────────────────────────────
+
+    private record CachedResult(ResultadoValidacion result, long expiresAt) {}
+
+    /** ConcurrentHashMap: seguro para acceso desde múltiples hilos del pool. */
+    private static final Map<String, CachedResult> cache = new ConcurrentHashMap<>();
+
+    // ── API pública ───────────────────────────────────────────────────────────
+
     /**
-     * Envía VALIDAR_TOKEN a svSesiones y retorna el resultado.
-     * Si ambos nodos fallan, devuelve inválido.
+     * Valida el token contra svSesiones.
+     * Primero consulta el caché; si hay hit vigente lo retorna sin abrir socket.
+     * Si no, contacta svSesiones y guarda el resultado por TTL_MS.
      */
     public static ResultadoValidacion validar(String token) {
         if (token == null || token.isBlank()) {
             return new ResultadoValidacion(false, null, null, "Token vacío");
         }
 
+        // ── Cache hit ─────────────────────────────────────────────────────────
+        CachedResult cached = cache.get(token);
+        if (cached != null && System.currentTimeMillis() < cached.expiresAt()) {
+            return cached.result();
+        }
+
+        // ── Cache miss: consultar svSesiones ──────────────────────────────────
         MensajeProtocolo req = MensajeProtocolo.request(Constantes.VALIDAR_TOKEN, token);
         req.setTipo(MensajeProtocolo.TIPO_REQUEST);
 
-        // Intentar nodo 1, luego nodo 2
         int[] puertos = { Constantes.PUERTO_SES_1, Constantes.PUERTO_SES_2 };
         for (int puerto : puertos) {
             try {
                 MensajeProtocolo resp = enviarYRecibir(req, puerto);
                 if (resp != null && resp.isOk()) {
-                    String user = resp.getString("username");
-                    String rol  = resp.getString("rol");
-                    return new ResultadoValidacion(true, user, rol, "Token válido");
+                    ResultadoValidacion resultado = new ResultadoValidacion(
+                            true, resp.getString("username"), resp.getString("rol"), "Token válido");
+                    // Guardar en caché solo los tokens válidos
+                    cache.put(token, new CachedResult(resultado,
+                            System.currentTimeMillis() + TTL_MS));
+                    return resultado;
                 }
                 if (resp != null) {
+                    // Token inválido: no cachear (podría ser un error transitorio)
                     return new ResultadoValidacion(false, null, null, resp.getMensaje());
                 }
             } catch (Exception e) {
@@ -51,11 +81,22 @@ public class ValidadorToken {
         return new ResultadoValidacion(false, null, null, "Servicio de sesiones no disponible");
     }
 
+    /**
+     * Invalida la entrada del caché para el token dado.
+     * Llamar opcionalmente tras confirmar un LOGOUT exitoso en svSesiones,
+     * para no esperar a que expire el TTL.
+     */
+    public static void invalidarCache(String token) {
+        if (token != null) cache.remove(token);
+    }
+
+    // ── Transporte ────────────────────────────────────────────────────────────
+
     private static MensajeProtocolo enviarYRecibir(MensajeProtocolo req, int puerto)
             throws IOException {
         try (Socket socket = new Socket(Constantes.HOST, puerto)) {
             socket.setSoTimeout(Constantes.TIMEOUT_MS);
-            PrintWriter  out = new PrintWriter(
+            PrintWriter   out = new PrintWriter(
                     new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
             BufferedReader in = new BufferedReader(
                     new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));

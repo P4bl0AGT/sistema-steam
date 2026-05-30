@@ -2,6 +2,7 @@
 title svMensajeria - Nodo 1 (Puerto 8083)
 cd /d "%~dp0\.."
 echo === svMensajeria Nodo 1 - Puerto 8083 ===
+echo Puertos: Servicio=8083 ^| Repl=9484
 echo Log: %cd%\logs\svMensajeria-1_0.log
 echo.
 java -cp "sistema-steam.jar;lib\gson-2.10.1.jar" com.steam.servidores.svMensajeria 1

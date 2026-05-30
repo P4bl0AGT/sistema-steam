@@ -2,6 +2,7 @@
 title svSesiones - Nodo 2 (Puerto 8181)
 cd /d "%~dp0\.."
 echo === svSesiones Nodo 2 - Puerto 8181 ===
+echo Puertos: Servicio=8181 ^| Repl=9583
 echo Log: %cd%\logs\svSesiones-2_0.log
 echo.
 java -cp "sistema-steam.jar;lib\gson-2.10.1.jar" com.steam.servidores.svSesiones 2

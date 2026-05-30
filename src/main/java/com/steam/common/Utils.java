@@ -49,7 +49,9 @@ public final class Utils {
                  Constantes.VER_ESTADISTICAS,
                  Constantes.VER_MIS_COMPRAS,
                  Constantes.VER_MIS_JUEGOS,
-                 Constantes.VER_MIS_RESERVAS    -> "JUEGOS";
+                 Constantes.VER_MIS_RESERVAS,
+                 Constantes.QUIEN_ES_COORDINADOR,
+                 Constantes.SHUTDOWN_GRACEFUL   -> "JUEGOS";
 
             case Constantes.ENVIAR_MENSAJE,
                  Constantes.VER_MENSAJES,

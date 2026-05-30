@@ -30,9 +30,10 @@ public class MensajeProtocolo {
     private String              token;       // token de sesión (null en LOGIN)
     private String              rolUsuario;  // rol del emisor
     private Map<String, Object> payload;     // datos específicos de la operación
-    private String              status;      // OK | ERROR
-    private String              mensaje;     // descripción legible del resultado
+    private String              status;        // OK | ERROR
+    private String              mensaje;       // descripción legible del resultado
     private long                timestamp;
+    private long                lamportClock;  // reloj de Lamport del emisor
 
     // ── Constructores de fábrica ──────────────────────────────────────────────
 
@@ -151,6 +152,9 @@ public class MensajeProtocolo {
 
     public long  getTimestamp()                    { return timestamp; }
     public void  setTimestamp(long v)              { this.timestamp = v; }
+
+    public long  getLamportClock()                 { return lamportClock; }
+    public void  setLamportClock(long v)           { this.lamportClock = v; }
 
     @Override
     public String toString() {

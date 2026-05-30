@@ -47,6 +47,8 @@ public class GestorLocks implements Runnable {
                 Thread.sleep(INTERVALO_MS);
                 liberarReservasExpiradas();
             } catch (InterruptedException e) {
+                // Restaurar el flag para que llamadores puedan detectarlo;
+                // break sale del while y run() termina normalmente.
                 Thread.currentThread().interrupt();
                 break;
             }

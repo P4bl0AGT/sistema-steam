@@ -110,3 +110,88 @@
 [2026-05-11 13:35:56.149] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
 [2026-05-11 13:36:06.160] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
 [2026-05-11 13:36:16.173] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
+[2026-05-11 17:02:53.167] [INFO   ] [svJuegos-2] ════════════════════════════════════
+  Componente  : svJuegos-2
+  Log archivo : logs/svJuegos-2_0.log
+════════════════════════════════════
+[2026-05-11 17:02:53.261] [INFO   ] [svJuegos-2] [JUEGOS] GestorLocks daemon iniciado
+[2026-05-11 17:02:53.261] [INFO   ] [svJuegos-2] [LOCKS] Gestor de Locks (daemon) iniciado. TTL=300s
+[2026-05-11 17:02:53.262] [INFO   ] [svJuegos-2] === svJuegos iniciado en puerto 8282 ===
+[2026-05-11 17:02:56.689] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:03:06.712] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:03:16.779] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:03:26.803] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:03:36.826] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:03:46.847] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:03:56.867] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:04:06.901] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:04:16.926] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:04:26.947] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:04:36.969] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:04:39.674] [INFO   ] [svJuegos-2] [JUEGOS] op=COMPRAR_JUEGO rId=bc58cccd-9b9b-48a7-b233-58056819dea9
+[2026-05-11 17:04:46.989] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:04:57.012] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:05:07.036] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:05:17.058] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:05:27.079] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:05:37.098] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:05:47.118] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:05:57.144] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:06:07.163] [INFO   ] [svJuegos-2] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-28 16:06:14.109] [INFO   ] [svJuegos-2] ════════════════════════════════════
+  Componente  : svJuegos-2
+  Log archivo : logs/svJuegos-2_0.log
+════════════════════════════════════
+[2026-05-28 16:06:14.190] [INFO   ] [svJuegos-2] [JUEGOS] GestorLocks daemon iniciado
+[2026-05-28 16:06:14.190] [INFO   ] [svJuegos-2] [LOCKS] Gestor de Locks (daemon) iniciado. TTL=300s
+[2026-05-28 16:06:14.190] [INFO   ] [svJuegos-2] === svJuegos iniciado en puerto 8282 ===
+[2026-05-29 23:44:01.541] [INFO   ] [svJuegos-2] ════════════════════════════════════
+  Componente  : svJuegos-2
+  Log archivo : logs/svJuegos-2_0.log
+════════════════════════════════════
+[2026-05-29 23:44:01.682] [INFO   ] [svJuegos-2] [BULLY] GestorBully iniciado. id=2 puerto=9282
+[2026-05-29 23:44:01.683] [INFO   ] [svJuegos-2] [JUEGOS] GestorLocks daemon iniciado
+[2026-05-29 23:44:01.684] [INFO   ] [svJuegos-2] [LOCKS] Gestor de Locks (daemon) iniciado. TTL=300s
+[2026-05-29 23:44:01.684] [INFO   ] [svJuegos-2] === svJuegos iniciado en puerto 8282 ===
+[2026-05-29 23:44:01.693] [INFO   ] [svJuegos-2] [BULLY] Escuchando en puerto 9282
+[2026-05-29 23:44:01.693] [INFO   ] [svJuegos-2] [MUTEX] Servidor escuchando en puerto 9382
+[2026-05-29 23:44:03.185] [INFO   ] [svJuegos-2] [BULLY] t=1 Iniciando elección. id=2
+[2026-05-29 23:44:03.187] [INFO   ] [svJuegos-2] [BULLY] t=2 SOY COORDINADOR (id=2)
+[2026-05-29 23:44:03.206] [INFO   ] [svJuegos-2] [BULLY] t=5 OK enviado a nodo-1
+[2026-05-29 23:44:08.558] [INFO   ] [svJuegos-2] [JUEGOS] op=QUIEN_ES_COORDINADOR rId=t1
+[2026-05-29 23:44:08.563] [INFO   ] [svJuegos-2] [LAMPORT] t=11 op=QUIEN_ES_COORDINADOR
+[2026-05-30 00:19:59.572] [INFO   ] [svJuegos-2] ════════════════════════════════════
+  Componente  : svJuegos-2
+  Log archivo : logs/svJuegos-2_0.log
+════════════════════════════════════
+[2026-05-30 00:19:59.714] [INFO   ] [svJuegos-2] [REPL] svJuegos-2 servidor de replicación en puerto 9582
+[2026-05-30 00:19:59.717] [INFO   ] [svJuegos-2] [REPL] svJuegos-2 replicación configurada → peer puerto:9482
+[2026-05-30 00:19:59.719] [INFO   ] [svJuegos-2] [MUTEX] Servidor escuchando en puerto 9382
+[2026-05-30 00:19:59.719] [INFO   ] [svJuegos-2] [BULLY] Escuchando en puerto 9282
+[2026-05-30 00:19:59.721] [INFO   ] [svJuegos-2] [BULLY] GestorBully iniciado. id=2 puerto=9282
+[2026-05-30 00:19:59.722] [INFO   ] [svJuegos-2] [JUEGOS] GestorLocks daemon iniciado
+[2026-05-30 00:19:59.722] [INFO   ] [svJuegos-2] [LOCKS] Gestor de Locks (daemon) iniciado. TTL=300s
+[2026-05-30 00:19:59.723] [INFO   ] [svJuegos-2] === svJuegos iniciado en puerto 8282 ===
+[2026-05-30 00:20:01.226] [INFO   ] [svJuegos-2] [BULLY] t=1 Iniciando elección. id=2
+[2026-05-30 00:20:01.227] [INFO   ] [svJuegos-2] [BULLY] t=2 SOY COORDINADOR (id=2)
+[2026-05-30 00:20:01.249] [INFO   ] [svJuegos-2] [BULLY] t=5 OK enviado a nodo-1
+[2026-05-30 00:20:01.251] [INFO   ] [svJuegos-2] [BULLY] t=6 Iniciando elección. id=2
+[2026-05-30 00:20:01.251] [INFO   ] [svJuegos-2] [BULLY] t=7 SOY COORDINADOR (id=2)
+[2026-05-30 00:20:12.154] [INFO   ] [svJuegos-2] [JUEGOS] op=COMPRAR_JUEGO rId=c1
+[2026-05-30 00:20:12.159] [INFO   ] [svJuegos-2] [LAMPORT] t=22 op=COMPRAR_JUEGO
+[2026-05-30 00:20:48.041] [INFO   ] [svJuegos-2] ════════════════════════════════════
+  Componente  : svJuegos-2
+  Log archivo : logs/svJuegos-2_0.log
+════════════════════════════════════
+[2026-05-30 00:20:48.210] [INFO   ] [svJuegos-2] [REPL] svJuegos-2 servidor de replicación en puerto 9582
+[2026-05-30 00:20:48.212] [INFO   ] [svJuegos-2] [REPL] svJuegos-2 replicación configurada → peer puerto:9482
+[2026-05-30 00:20:48.214] [INFO   ] [svJuegos-2] [MUTEX] Servidor escuchando en puerto 9382
+[2026-05-30 00:20:48.214] [INFO   ] [svJuegos-2] [BULLY] Escuchando en puerto 9282
+[2026-05-30 00:20:48.215] [INFO   ] [svJuegos-2] [BULLY] GestorBully iniciado. id=2 puerto=9282
+[2026-05-30 00:20:48.216] [INFO   ] [svJuegos-2] [JUEGOS] GestorLocks daemon iniciado
+[2026-05-30 00:20:48.216] [INFO   ] [svJuegos-2] [LOCKS] Gestor de Locks (daemon) iniciado. TTL=300s
+[2026-05-30 00:20:48.216] [INFO   ] [svJuegos-2] === svJuegos iniciado en puerto 8282 ===
+[2026-05-30 00:20:49.718] [INFO   ] [svJuegos-2] [BULLY] t=5 Iniciando elección. id=2
+[2026-05-30 00:20:49.718] [INFO   ] [svJuegos-2] [BULLY] t=4 OK enviado a nodo-1
+[2026-05-30 00:20:49.721] [INFO   ] [svJuegos-2] [BULLY] t=6 SOY COORDINADOR (id=2)
+[2026-05-30 00:20:58.318] [INFO   ] [svJuegos-2] [REPL] svJuegos-2 Copy actualizado: data/GME_Copy.txt (2355 bytes)

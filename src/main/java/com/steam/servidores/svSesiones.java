@@ -1,6 +1,5 @@
 package com.steam.servidores;
 
-import com.google.gson.Gson;
 import com.steam.common.*;
 import com.steam.models.*;
 
@@ -33,7 +32,8 @@ import java.util.logging.*;
  */
 public class svSesiones {
 
-    private static final Logger LOG = Logger.getLogger(svSesiones.class.getName());
+    private static final Logger       LOG          = Logger.getLogger(svSesiones.class.getName());
+    private static final RelojLamport relojLamport = new RelojLamport();
 
     private final int                          puerto;
     private final GestorPersistencia<BDSesiones> gp;
@@ -47,9 +47,11 @@ public class svSesiones {
         this.gp     = new GestorPersistencia<>(
                 Constantes.SES_MAIN, Constantes.SES_COPY, BDSesiones.class);
 
-        // Sembrar datos iniciales si la BD está vacía o no tiene usuarios
+        // Sembrar solo si AMBOS archivos (Main y Copy) están ausentes o vacíos.
+        // Evita que el Nodo 2 re-siembre usuarios cuando el Nodo 1 ya escribió.
         BDSesiones bd = gp.leer();
-        if (bd == null || bd.usuarios.isEmpty()) {
+        if (archivoVacio(Constantes.SES_MAIN) && archivoVacio(Constantes.SES_COPY)
+                && (bd == null || bd.usuarios.isEmpty())) {
             if (bd == null) bd = new BDSesiones();
             bd.usuarios.add(new Usuario("admin",     Utils.hashPassword("admin123"),     Constantes.ROL_ADMIN));
             bd.usuarios.add(new Usuario("vendedor1", Utils.hashPassword("pass123"),      Constantes.ROL_VENDEDOR));
@@ -65,7 +67,16 @@ public class svSesiones {
         int nodo   = args.length > 0 ? Integer.parseInt(args[0]) : 1;
         int puerto = (nodo == 2) ? Constantes.PUERTO_SES_2 : Constantes.PUERTO_SES_1;
         GestorLog.configurar("svSesiones-" + nodo);
-        new svSesiones(puerto).escuchar();
+
+        svSesiones sv = new svSesiones(puerto);
+
+        // ── Snapshot periódico: Main → Copy cada 30s (solo nodo 1) ──────────
+        if (nodo == 1) {
+            new GestorSnapshot(Constantes.SES_MAIN, Constantes.SES_COPY,
+                    "svSesiones-" + nodo, 30).start();
+        }
+
+        sv.escuchar();
     }
 
     public void escuchar() {
@@ -94,8 +105,11 @@ public class svSesiones {
             String linea = in.readLine();
             if (linea == null) return;
 
-            MensajeProtocolo req  = MensajeProtocolo.fromJson(linea);
+            MensajeProtocolo req = MensajeProtocolo.fromJson(linea);
+            relojLamport.update(req.getLamportClock());
+
             MensajeProtocolo resp = procesar(req);
+            resp.setLamportClock(relojLamport.tick());
             out.println(resp.toJson());
 
         } catch (SocketTimeoutException e) {
@@ -110,7 +124,9 @@ public class svSesiones {
     private MensajeProtocolo procesar(MensajeProtocolo req) {
         if (req == null) return MensajeProtocolo.error("?", "Mensaje inválido");
 
-        LOG.info("[SES] op=" + req.getOperacion() + " rId=" + req.getRequestId());
+        // HEALTH_CHECK se logea en FINE para no inundar el log (~6 entradas/min por nodo)
+        LOG.log(Constantes.HEALTH_CHECK.equals(req.getOperacion()) ? Level.FINE : Level.INFO,
+                "[SES] op=" + req.getOperacion() + " rId=" + req.getRequestId());
 
         return switch (req.getOperacion()) {
             case Constantes.HEALTH_CHECK      -> healthCheck(req);
@@ -345,5 +361,11 @@ public class svSesiones {
             }
             return MensajeProtocolo.ok(req.getRequestId(), "Contraseña actualizada");
         }
+    }
+
+    /** Retorna true si el archivo no existe o tiene tamaño 0. */
+    private static boolean archivoVacio(String path) {
+        File f = new File(path);
+        return !f.exists() || f.length() == 0;
     }
 }

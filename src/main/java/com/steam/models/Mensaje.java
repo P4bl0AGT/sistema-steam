@@ -6,6 +6,7 @@ public class Mensaje {
     public String  receptor;
     public String  contenido;
     public long    timestamp;
+    public long    lamportClock; // reloj de Lamport del emisor al momento del envío
     public boolean entregado;
     public boolean leido;
 

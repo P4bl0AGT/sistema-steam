@@ -34,7 +34,8 @@ import java.util.stream.Collectors;
  */
 public class svMensajeria {
 
-    private static final Logger LOG = Logger.getLogger(svMensajeria.class.getName());
+    private static final Logger       LOG          = Logger.getLogger(svMensajeria.class.getName());
+    private static final RelojLamport relojLamport = new RelojLamport();
 
     private final int                            puerto;
     private final GestorPersistencia<BDMensajeria> gp;
@@ -56,7 +57,16 @@ public class svMensajeria {
         int nodo   = args.length > 0 ? Integer.parseInt(args[0]) : 1;
         int puerto = (nodo == 2) ? Constantes.PUERTO_MSG_2 : Constantes.PUERTO_MSG_1;
         GestorLog.configurar("svMensajeria-" + nodo);
-        new svMensajeria(puerto).escuchar();
+
+        svMensajeria sv = new svMensajeria(puerto);
+
+        // ── Snapshot periódico: Main → Copy cada 30s (solo nodo 1) ──────────
+        if (nodo == 1) {
+            new GestorSnapshot(Constantes.MSG_MAIN, Constantes.MSG_COPY,
+                    "svMensajeria-" + nodo, 30).start();
+        }
+
+        sv.escuchar();
     }
 
     public void escuchar() {
@@ -85,8 +95,11 @@ public class svMensajeria {
             String linea = in.readLine();
             if (linea == null) return;
 
-            MensajeProtocolo req  = MensajeProtocolo.fromJson(linea);
+            MensajeProtocolo req = MensajeProtocolo.fromJson(linea);
+            relojLamport.update(req.getLamportClock());
+
             MensajeProtocolo resp = procesar(req);
+            resp.setLamportClock(relojLamport.tick());
             out.println(resp.toJson());
 
         } catch (SocketTimeoutException e) {
@@ -100,7 +113,10 @@ public class svMensajeria {
 
     private MensajeProtocolo procesar(MensajeProtocolo req) {
         if (req == null) return MensajeProtocolo.error("?", "Mensaje inválido");
-        LOG.info("[MSG] op=" + req.getOperacion() + " rId=" + req.getRequestId());
+        boolean esHC = Constantes.HEALTH_CHECK.equals(req.getOperacion());
+        LOG.log(esHC ? Level.FINE : Level.INFO,
+                "[MSG] op=" + req.getOperacion() + " rId=" + req.getRequestId());
+        if (!esHC) LOG.info("[LAMPORT] t=" + relojLamport.get() + " op=" + req.getOperacion());
 
         return switch (req.getOperacion()) {
             case Constantes.HEALTH_CHECK    -> healthCheck(req);
@@ -154,6 +170,8 @@ public class svMensajeria {
 
             Mensaje msg = new Mensaje(UUID.randomUUID().toString(),
                     auth.username(), receptor, contenido);
+            // Guardar el reloj de Lamport del momento de envío para ordenamiento causal
+            msg.lamportClock = relojLamport.tick();
             bd.mensajes.add(msg);
 
             try {
@@ -243,14 +261,18 @@ public class svMensajeria {
             List<Map<String, Object>> conversacion = bd.mensajes.stream()
                     .filter(m -> (m.emisor.equals(yo)  && m.receptor.equals(conUsuario)) ||
                                  (m.emisor.equals(conUsuario) && m.receptor.equals(yo)))
-                    .sorted(Comparator.comparingLong(m -> m.timestamp))
+                    // Ordenar por Lamport para orden causal correcto
+                    // (fallback a timestamp si lamportClock == 0 por mensajes anteriores)
+                    .sorted(Comparator.comparingLong((com.steam.models.Mensaje m) ->
+                            m.lamportClock > 0 ? m.lamportClock : m.timestamp))
                     .map(m -> {
                         Map<String, Object> info = new LinkedHashMap<>();
-                        info.put("de",        m.emisor);
-                        info.put("para",      m.receptor);
-                        info.put("contenido", m.contenido);
-                        info.put("fecha",     new java.util.Date(m.timestamp).toString());
-                        info.put("entregado", m.entregado);
+                        info.put("de",          m.emisor);
+                        info.put("para",        m.receptor);
+                        info.put("contenido",   m.contenido);
+                        info.put("fecha",       new java.util.Date(m.timestamp).toString());
+                        info.put("lamportClock", m.lamportClock);
+                        info.put("entregado",   m.entregado);
                         return info;
                     })
                     .collect(Collectors.toList());

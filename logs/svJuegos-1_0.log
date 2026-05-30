@@ -133,3 +133,502 @@
 [2026-05-11 13:35:56.147] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
 [2026-05-11 13:36:06.159] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
 [2026-05-11 13:36:16.171] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=675d0baf-7b50-4954-8379-40a003694d9a
+[2026-05-11 16:05:27.044] [INFO   ] [svJuegos-1] ════════════════════════════════════
+  Componente  : svJuegos-1
+  Log archivo : logs/svJuegos-1_0.log
+════════════════════════════════════
+[2026-05-11 16:05:27.129] [INFO   ] [svJuegos-1] [JUEGOS] GestorLocks daemon iniciado
+[2026-05-11 16:05:27.130] [INFO   ] [svJuegos-1] [LOCKS] Gestor de Locks (daemon) iniciado. TTL=300s
+[2026-05-11 16:05:27.131] [INFO   ] [svJuegos-1] === svJuegos iniciado en puerto 8082 ===
+[2026-05-11 16:07:27.872] [INFO   ] [svJuegos-1] ════════════════════════════════════
+  Componente  : svJuegos-1
+  Log archivo : logs/svJuegos-1_0.log
+════════════════════════════════════
+[2026-05-11 16:07:27.958] [INFO   ] [svJuegos-1] [JUEGOS] GestorLocks daemon iniciado
+[2026-05-11 16:07:27.958] [INFO   ] [svJuegos-1] [LOCKS] Gestor de Locks (daemon) iniciado. TTL=300s
+[2026-05-11 16:07:27.959] [INFO   ] [svJuegos-1] === svJuegos iniciado en puerto 8082 ===
+[2026-05-11 16:09:59.324] [INFO   ] [svJuegos-1] ════════════════════════════════════
+  Componente  : svJuegos-1
+  Log archivo : logs/svJuegos-1_0.log
+════════════════════════════════════
+[2026-05-11 16:09:59.412] [INFO   ] [svJuegos-1] [JUEGOS] GestorLocks daemon iniciado
+[2026-05-11 16:09:59.412] [INFO   ] [svJuegos-1] [LOCKS] Gestor de Locks (daemon) iniciado. TTL=300s
+[2026-05-11 16:09:59.412] [INFO   ] [svJuegos-1] === svJuegos iniciado en puerto 8082 ===
+[2026-05-11 16:10:11.712] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:10:21.769] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:10:31.780] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:10:41.793] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:10:51.850] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:11:01.866] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:11:11.880] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:11:21.895] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:11:31.911] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:11:41.939] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:11:51.964] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:12:01.994] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:12:12.012] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:12:22.037] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:12:32.052] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:12:42.067] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:12:52.089] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:13:02.106] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:13:12.119] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:13:22.130] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:13:32.140] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:13:42.151] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:13:52.162] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:14:02.172] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:14:12.180] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:14:22.191] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:14:32.201] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:14:42.211] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:14:52.219] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:15:02.227] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:15:12.278] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:15:22.288] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:15:32.296] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:15:40.539] [INFO   ] [svJuegos-1] [JUEGOS] op=LISTAR_JUEGOS rId=dfce4b0f-2c98-4314-9ae6-61b9f89ed6a3
+[2026-05-11 16:15:42.303] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:15:52.311] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:16:02.323] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 16:16:12.330] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=5f4e4548-a4da-40d1-b75f-2446d08c808e
+[2026-05-11 17:02:13.293] [INFO   ] [svJuegos-1] ════════════════════════════════════
+  Componente  : svJuegos-1
+  Log archivo : logs/svJuegos-1_0.log
+════════════════════════════════════
+[2026-05-11 17:02:13.394] [INFO   ] [svJuegos-1] [JUEGOS] GestorLocks daemon iniciado
+[2026-05-11 17:02:13.394] [INFO   ] [svJuegos-1] [LOCKS] Gestor de Locks (daemon) iniciado. TTL=300s
+[2026-05-11 17:02:13.395] [INFO   ] [svJuegos-1] === svJuegos iniciado en puerto 8082 ===
+[2026-05-11 17:02:26.521] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:02:36.581] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:02:46.637] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:02:56.655] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:03:06.709] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:03:16.776] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:03:26.800] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:03:36.823] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:03:45.582] [INFO   ] [svJuegos-1] [JUEGOS] op=LISTAR_JUEGOS rId=048992ad-3132-4e61-a8d5-4449f83e238c
+[2026-05-11 17:03:46.845] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:03:56.865] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:04:06.894] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:04:16.922] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:04:26.943] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:04:36.966] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:04:43.250] [INFO   ] [svJuegos-1] [JUEGOS] op=CONFIRMAR_PAGO rId=9f7bf35f-bb99-42c4-8672-8e3772af91b1
+[2026-05-11 17:04:46.987] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:04:57.009] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:05:07.033] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:05:17.056] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:05:27.076] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:05:37.095] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:05:47.115] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:05:57.138] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 17:06:07.161] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=b6e18339-760d-4124-ae2f-232b4e3ae3b6
+[2026-05-11 19:01:24.713] [INFO   ] [svJuegos-1] ════════════════════════════════════
+  Componente  : svJuegos-1
+  Log archivo : logs/svJuegos-1_0.log
+════════════════════════════════════
+[2026-05-11 19:01:24.798] [INFO   ] [svJuegos-1] [JUEGOS] GestorLocks daemon iniciado
+[2026-05-11 19:01:24.798] [INFO   ] [svJuegos-1] [LOCKS] Gestor de Locks (daemon) iniciado. TTL=300s
+[2026-05-11 19:01:24.799] [INFO   ] [svJuegos-1] === svJuegos iniciado en puerto 8082 ===
+[2026-05-11 19:01:38.899] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:01:48.976] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:01:58.987] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:02:09.000] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:02:19.054] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:02:29.069] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:02:39.083] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:02:49.094] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:02:59.108] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:03:09.120] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:03:19.134] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:03:29.147] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:03:39.158] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:03:49.171] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:03:59.182] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:04:09.194] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:04:19.206] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:04:29.227] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:04:39.252] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:04:49.270] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:04:59.282] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:05:09.292] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:05:12.806] [INFO   ] [svJuegos-1] [JUEGOS] op=LISTAR_JUEGOS rId=57206f60-4986-4e40-8885-3146cfa49413
+[2026-05-11 19:05:18.766] [INFO   ] [svJuegos-1] [JUEGOS] op=COMPRAR_JUEGO rId=fd6308ae-bf1e-49d4-9067-f843221150af
+[2026-05-11 19:05:19.304] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:05:29.313] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:05:32.960] [INFO   ] [svJuegos-1] [JUEGOS] op=VER_MIS_RESERVAS rId=390b1a96-44a2-432f-8f9e-41938ceb7ca7
+[2026-05-11 19:05:35.581] [INFO   ] [svJuegos-1] [JUEGOS] op=VER_MIS_RESERVAS rId=8134239c-aa3a-4149-9862-8240895756f2
+[2026-05-11 19:05:39.323] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:05:48.111] [INFO   ] [svJuegos-1] [JUEGOS] op=VER_MIS_RESERVAS rId=a65f578b-62f7-4e43-a673-b879110c985c
+[2026-05-11 19:05:49.333] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:05:49.333] [INFO   ] [svJuegos-1] [JUEGOS] op=CONFIRMAR_PAGO rId=9752e70c-2178-47d5-90e6-a960a9d168cd
+[2026-05-11 19:05:53.381] [INFO   ] [svJuegos-1] [JUEGOS] op=VER_MIS_COMPRAS rId=54e5727b-5b7f-4f7d-8a7b-3b2b2fb00225
+[2026-05-11 19:05:59.342] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:06:09.350] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:06:19.359] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:06:29.369] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:06:29.584] [INFO   ] [svJuegos-1] [JUEGOS] op=PUBLICAR_JUEGO rId=d5613961-0a02-473b-907d-6f1a227a81db
+[2026-05-11 19:06:32.007] [INFO   ] [svJuegos-1] [JUEGOS] op=LISTAR_JUEGOS rId=c7a2e2be-296e-4276-8b88-aad4d08b61b8
+[2026-05-11 19:06:39.378] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:06:49.393] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:06:59.400] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:07:09.443] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:07:19.453] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:07:29.463] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:07:39.474] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:07:49.484] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:07:59.492] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:08:00.812] [INFO   ] [svJuegos-1] [JUEGOS] op=VER_ESTADISTICAS rId=75859129-f7c3-441e-bc9e-33aa6bdd92eb
+[2026-05-11 19:08:09.285] [INFO   ] [svJuegos-1] [JUEGOS] op=VER_HISTORIAL rId=95ed7a82-1577-42b7-b952-8b32b5f8e4bc
+[2026-05-11 19:08:09.502] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:08:19.512] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:08:29.525] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:08:39.546] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:08:49.565] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:08:59.588] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:09:09.601] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:09:19.616] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:09:29.630] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:09:39.645] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:09:49.666] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:09:59.689] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:10:09.701] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:10:19.715] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:10:29.734] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:10:39.755] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:10:49.773] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:10:59.783] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:11:09.806] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:11:19.828] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:11:29.850] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:11:39.869] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:11:49.881] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:11:59.904] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:12:09.915] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:12:19.937] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:12:29.957] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:12:39.970] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:12:49.985] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:12:59.998] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:13:10.017] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:13:20.027] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:13:30.043] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:13:40.062] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:13:50.074] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:14:00.083] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:14:10.101] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:14:20.120] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:14:30.132] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:14:40.141] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:14:50.155] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:15:00.163] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:15:10.180] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:15:20.194] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:15:30.213] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:15:40.228] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:15:50.243] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:16:00.266] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:16:10.279] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:16:20.290] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:16:30.305] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:16:40.328] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:16:50.341] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:17:00.350] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:17:10.363] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:17:20.369] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:17:30.385] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:17:40.395] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:17:50.413] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:18:00.430] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:18:10.450] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:18:20.472] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:18:30.480] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:18:40.488] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:18:50.504] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:19:00.521] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:19:10.529] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:19:20.548] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:19:30.569] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:19:40.592] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:19:50.610] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:20:00.624] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:20:10.639] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:20:20.660] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:20:30.681] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:20:40.704] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:20:50.723] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:21:00.742] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:21:10.751] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:21:20.769] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:21:30.781] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:21:40.806] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:21:50.815] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:22:00.830] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:22:10.848] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:22:20.862] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:22:30.869] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:22:40.878] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:22:50.896] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:23:00.908] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:23:10.920] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:23:20.938] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:23:30.947] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:23:40.956] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:23:50.972] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:24:00.990] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:24:11.009] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:24:21.030] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:24:31.045] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:24:41.054] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:24:51.073] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:25:01.081] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:25:11.098] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:25:21.114] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:25:31.135] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:25:41.146] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:25:51.156] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:26:01.164] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:26:11.179] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:26:21.193] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:26:31.207] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:26:41.217] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:26:51.233] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:27:01.242] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:27:11.255] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:27:21.272] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:27:31.289] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:27:41.301] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:27:51.310] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:28:01.320] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:28:11.333] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:28:21.340] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:28:31.347] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:28:41.365] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:28:51.374] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:29:01.385] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:29:11.401] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:29:21.421] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:29:31.436] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:29:41.460] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:29:51.470] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:30:01.489] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:30:11.502] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:30:21.515] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:30:31.536] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:30:41.552] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:30:51.568] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:31:01.578] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:31:11.600] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:31:21.611] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:31:31.622] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:31:41.641] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:31:51.661] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:32:01.675] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:32:11.688] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:32:21.703] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:32:31.718] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:32:41.727] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:32:51.740] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:33:01.758] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:33:11.774] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:33:21.796] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:33:31.804] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:33:41.821] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:33:51.832] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:34:01.841] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:34:11.853] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:34:21.872] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:34:31.885] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:34:41.908] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:34:51.925] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:35:01.939] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:35:11.954] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:35:21.961] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:35:31.972] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:35:41.994] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:35:52.012] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:36:02.018] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:36:12.036] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:36:22.050] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:36:32.069] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:36:42.077] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:36:52.095] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:37:02.102] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:37:12.119] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:37:22.127] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:37:32.135] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:37:42.151] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:37:52.161] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:38:02.182] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:38:12.197] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:38:22.205] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:38:32.212] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:38:42.217] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:38:52.224] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:39:02.241] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:39:12.246] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:39:22.251] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:39:32.259] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:39:42.264] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:39:52.271] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:40:02.294] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:40:12.305] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:40:22.324] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:40:32.331] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:40:42.349] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:40:52.368] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:41:02.389] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 19:41:12.403] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=9c08a3bc-d2ed-48b2-80ba-d359d2d3a72b
+[2026-05-11 21:27:02.399] [INFO   ] [svJuegos-1] ════════════════════════════════════
+  Componente  : svJuegos-1
+  Log archivo : logs/svJuegos-1_0.log
+════════════════════════════════════
+[2026-05-11 21:27:02.486] [INFO   ] [svJuegos-1] [JUEGOS] GestorLocks daemon iniciado
+[2026-05-11 21:27:02.486] [INFO   ] [svJuegos-1] [LOCKS] Gestor de Locks (daemon) iniciado. TTL=300s
+[2026-05-11 21:27:02.487] [INFO   ] [svJuegos-1] === svJuegos iniciado en puerto 8082 ===
+[2026-05-11 21:27:23.459] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=6c5bc111-1b22-4e99-801d-7b5f90892ecd
+[2026-05-11 21:27:33.517] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=6c5bc111-1b22-4e99-801d-7b5f90892ecd
+[2026-05-11 21:27:43.573] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=6c5bc111-1b22-4e99-801d-7b5f90892ecd
+[2026-05-11 21:27:53.588] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=6c5bc111-1b22-4e99-801d-7b5f90892ecd
+[2026-05-11 21:28:03.605] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=6c5bc111-1b22-4e99-801d-7b5f90892ecd
+[2026-05-11 21:28:13.616] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=6c5bc111-1b22-4e99-801d-7b5f90892ecd
+[2026-05-11 21:28:23.628] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=6c5bc111-1b22-4e99-801d-7b5f90892ecd
+[2026-05-16 11:02:27.433] [INFO   ] [svJuegos-1] ════════════════════════════════════
+  Componente  : svJuegos-1
+  Log archivo : logs/svJuegos-1_0.log
+════════════════════════════════════
+[2026-05-16 11:02:27.554] [INFO   ] [svJuegos-1] [JUEGOS] GestorLocks daemon iniciado
+[2026-05-16 11:02:27.555] [INFO   ] [svJuegos-1] [LOCKS] Gestor de Locks (daemon) iniciado. TTL=300s
+[2026-05-16 11:02:27.555] [INFO   ] [svJuegos-1] === svJuegos iniciado en puerto 8082 ===
+[2026-05-16 11:02:46.472] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=789289dd-1d3a-4f42-84d6-87f6be5bd79e
+[2026-05-16 11:02:56.533] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=789289dd-1d3a-4f42-84d6-87f6be5bd79e
+[2026-05-16 11:03:06.545] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=789289dd-1d3a-4f42-84d6-87f6be5bd79e
+[2026-05-16 11:03:16.559] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=789289dd-1d3a-4f42-84d6-87f6be5bd79e
+[2026-05-16 11:03:26.570] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=789289dd-1d3a-4f42-84d6-87f6be5bd79e
+[2026-05-16 11:03:36.582] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=789289dd-1d3a-4f42-84d6-87f6be5bd79e
+[2026-05-16 11:03:46.594] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=789289dd-1d3a-4f42-84d6-87f6be5bd79e
+[2026-05-16 11:03:56.605] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=789289dd-1d3a-4f42-84d6-87f6be5bd79e
+[2026-05-16 11:04:06.618] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=789289dd-1d3a-4f42-84d6-87f6be5bd79e
+[2026-05-16 11:04:16.669] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=789289dd-1d3a-4f42-84d6-87f6be5bd79e
+[2026-05-16 11:06:48.827] [INFO   ] [svJuegos-1] ════════════════════════════════════
+  Componente  : svJuegos-1
+  Log archivo : logs/svJuegos-1_0.log
+════════════════════════════════════
+[2026-05-16 11:06:48.908] [INFO   ] [svJuegos-1] [JUEGOS] GestorLocks daemon iniciado
+[2026-05-16 11:06:48.908] [INFO   ] [svJuegos-1] [LOCKS] Gestor de Locks (daemon) iniciado. TTL=300s
+[2026-05-16 11:06:48.909] [INFO   ] [svJuegos-1] === svJuegos iniciado en puerto 8082 ===
+[2026-05-16 11:06:56.994] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=789289dd-1d3a-4f42-84d6-87f6be5bd79e
+[2026-05-16 11:07:03.119] [INFO   ] [svJuegos-1] [JUEGOS] op=VER_SALDO rId=1e5c3cd0-8b96-4921-808e-eb56d452f89f
+[2026-05-16 11:07:07.012] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=789289dd-1d3a-4f42-84d6-87f6be5bd79e
+[2026-05-16 11:07:11.580] [INFO   ] [svJuegos-1] [JUEGOS] op=LISTAR_JUEGOS rId=99f505db-d904-4231-94bf-8ef6d882e5da
+[2026-05-16 11:07:13.425] [INFO   ] [svJuegos-1] [JUEGOS] op=COMPRAR_JUEGO rId=486aa229-1948-4fd0-8fbe-fdc9b031b8e2
+[2026-05-16 11:07:15.527] [INFO   ] [svJuegos-1] [JUEGOS] op=CONFIRMAR_PAGO rId=d656a65d-01bb-4ffe-876d-247f50ef0d23
+[2026-05-16 11:07:17.031] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=789289dd-1d3a-4f42-84d6-87f6be5bd79e
+[2026-05-28 16:06:06.357] [INFO   ] [svJuegos-1] ════════════════════════════════════
+  Componente  : svJuegos-1
+  Log archivo : logs/svJuegos-1_0.log
+════════════════════════════════════
+[2026-05-28 16:06:06.436] [INFO   ] [svJuegos-1] [JUEGOS] GestorLocks daemon iniciado
+[2026-05-28 16:06:06.436] [INFO   ] [svJuegos-1] [LOCKS] Gestor de Locks (daemon) iniciado. TTL=300s
+[2026-05-28 16:06:06.437] [INFO   ] [svJuegos-1] === svJuegos iniciado en puerto 8082 ===
+[2026-05-28 16:07:04.965] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:07:15.026] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:07:25.076] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:07:35.089] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:07:45.102] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:07:50.116] [INFO   ] [svJuegos-1] [JUEGOS] op=LISTAR_JUEGOS rId=97c583a4-3db7-4461-ac3b-d0ad05711775
+[2026-05-28 16:07:55.114] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:08:05.125] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:08:15.138] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:08:25.148] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:08:27.788] [INFO   ] [svJuegos-1] [JUEGOS] op=LISTAR_JUEGOS rId=cc808252-810d-46e3-b9e8-bc40422223bc
+[2026-05-28 16:08:30.858] [INFO   ] [svJuegos-1] [JUEGOS] op=VER_MIS_RESERVAS rId=e98c5ae2-8eb0-4065-b775-39886acb8100
+[2026-05-28 16:08:32.254] [INFO   ] [svJuegos-1] [JUEGOS] op=LISTAR_JUEGOS rId=0c8af444-c673-4f02-8f26-ffba9eb2693c
+[2026-05-28 16:08:34.517] [INFO   ] [svJuegos-1] [JUEGOS] op=COMPRAR_JUEGO rId=fd3caf01-496c-4006-9c35-c5517ff2df72
+[2026-05-28 16:08:35.161] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:08:36.413] [INFO   ] [svJuegos-1] [JUEGOS] op=CONFIRMAR_PAGO rId=be573e56-4823-48b7-ad3c-ef8f61c78a0e
+[2026-05-28 16:08:45.174] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:08:55.185] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:09:05.197] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:09:15.208] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:09:25.220] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:09:35.231] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:09:45.242] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:09:55.252] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:10:05.261] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:10:15.271] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:10:25.282] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:10:35.293] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:10:45.305] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:10:55.315] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:11:05.324] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:11:15.333] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:11:25.343] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:11:35.352] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:11:45.361] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:11:55.370] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:12:05.378] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:12:15.386] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:12:25.395] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:12:35.405] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:12:45.420] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:12:55.428] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:13:05.437] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:13:15.446] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:13:25.457] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:13:35.465] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-28 16:13:45.472] [INFO   ] [svJuegos-1] [JUEGOS] op=HEALTH_CHECK rId=8742c51b-d90c-48e2-a14a-4107eb8c3766
+[2026-05-29 23:44:01.488] [INFO   ] [svJuegos-1] ════════════════════════════════════
+  Componente  : svJuegos-1
+  Log archivo : logs/svJuegos-1_0.log
+════════════════════════════════════
+[2026-05-29 23:44:01.661] [INFO   ] [svJuegos-1] [BULLY] GestorBully iniciado. id=1 puerto=9082
+[2026-05-29 23:44:01.662] [INFO   ] [svJuegos-1] [JUEGOS] GestorLocks daemon iniciado
+[2026-05-29 23:44:01.663] [INFO   ] [svJuegos-1] [LOCKS] Gestor de Locks (daemon) iniciado. TTL=300s
+[2026-05-29 23:44:01.663] [INFO   ] [svJuegos-1] === svJuegos iniciado en puerto 8082 ===
+[2026-05-29 23:44:01.678] [INFO   ] [svJuegos-1] [BULLY] Escuchando en puerto 9082
+[2026-05-29 23:44:01.678] [INFO   ] [svJuegos-1] [MUTEX] Servidor escuchando en puerto 9182
+[2026-05-29 23:44:03.162] [INFO   ] [svJuegos-1] [BULLY] t=1 Iniciando elección. id=1
+[2026-05-29 23:44:03.190] [INFO   ] [svJuegos-1] [BULLY] t=2 ELECTION enviado a nodo-2
+[2026-05-29 23:44:03.206] [INFO   ] [svJuegos-1] [BULLY] t=6 OK recibido de nodo-2
+[2026-05-29 23:44:03.209] [INFO   ] [svJuegos-1] [BULLY] t=7 COORDINATOR recibido, nuevo coordinador=2
+[2026-05-29 23:44:08.487] [INFO   ] [svJuegos-1] [JUEGOS] op=QUIEN_ES_COORDINADOR rId=t1
+[2026-05-29 23:44:08.491] [INFO   ] [svJuegos-1] [LAMPORT] t=12 op=QUIEN_ES_COORDINADOR
+[2026-05-30 00:19:59.567] [INFO   ] [svJuegos-1] ════════════════════════════════════
+  Componente  : svJuegos-1
+  Log archivo : logs/svJuegos-1_0.log
+════════════════════════════════════
+[2026-05-30 00:19:59.714] [INFO   ] [svJuegos-1] [REPL] svJuegos-1 servidor de replicación en puerto 9482
+[2026-05-30 00:19:59.717] [INFO   ] [svJuegos-1] [REPL] svJuegos-1 replicación configurada → peer puerto:9582
+[2026-05-30 00:19:59.719] [INFO   ] [svJuegos-1] [MUTEX] Servidor escuchando en puerto 9182
+[2026-05-30 00:19:59.719] [INFO   ] [svJuegos-1] [BULLY] Escuchando en puerto 9082
+[2026-05-30 00:19:59.721] [INFO   ] [svJuegos-1] [BULLY] GestorBully iniciado. id=1 puerto=9082
+[2026-05-30 00:19:59.722] [INFO   ] [svJuegos-1] [JUEGOS] GestorLocks daemon iniciado
+[2026-05-30 00:19:59.722] [INFO   ] [svJuegos-1] [LOCKS] Gestor de Locks (daemon) iniciado. TTL=300s
+[2026-05-30 00:19:59.723] [INFO   ] [svJuegos-1] === svJuegos iniciado en puerto 8082 ===
+[2026-05-30 00:20:01.225] [INFO   ] [svJuegos-1] [BULLY] t=1 Iniciando elección. id=1
+[2026-05-30 00:20:01.245] [INFO   ] [svJuegos-1] [BULLY] t=2 ELECTION enviado a nodo-2
+[2026-05-30 00:20:01.248] [INFO   ] [svJuegos-1] [BULLY] t=4 COORDINATOR recibido, nuevo coordinador=2
+[2026-05-30 00:20:01.249] [INFO   ] [svJuegos-1] [BULLY] t=6 OK recibido de nodo-2
+[2026-05-30 00:20:01.253] [INFO   ] [svJuegos-1] [BULLY] t=9 COORDINATOR recibido, nuevo coordinador=2
+[2026-05-30 00:20:12.061] [INFO   ] [svJuegos-1] [JUEGOS] op=LISTAR_JUEGOS rId=l2
+[2026-05-30 00:20:12.066] [INFO   ] [svJuegos-1] [LAMPORT] t=18 op=LISTAR_JUEGOS
+[2026-05-30 00:20:48.019] [INFO   ] [svJuegos-1] ════════════════════════════════════
+  Componente  : svJuegos-1
+  Log archivo : logs/svJuegos-1_0.log
+════════════════════════════════════
+[2026-05-30 00:20:48.178] [INFO   ] [svJuegos-1] [REPL] svJuegos-1 servidor de replicación en puerto 9482
+[2026-05-30 00:20:48.182] [INFO   ] [svJuegos-1] [REPL] svJuegos-1 replicación configurada → peer puerto:9582
+[2026-05-30 00:20:48.185] [INFO   ] [svJuegos-1] [MUTEX] Servidor escuchando en puerto 9182
+[2026-05-30 00:20:48.186] [INFO   ] [svJuegos-1] [BULLY] Escuchando en puerto 9082
+[2026-05-30 00:20:48.187] [INFO   ] [svJuegos-1] [BULLY] GestorBully iniciado. id=1 puerto=9082
+[2026-05-30 00:20:48.189] [INFO   ] [svJuegos-1] [JUEGOS] GestorLocks daemon iniciado
+[2026-05-30 00:20:48.189] [INFO   ] [svJuegos-1] [LOCKS] Gestor de Locks (daemon) iniciado. TTL=300s
+[2026-05-30 00:20:48.189] [INFO   ] [svJuegos-1] === svJuegos iniciado en puerto 8082 ===
+[2026-05-30 00:20:49.690] [INFO   ] [svJuegos-1] [BULLY] t=1 Iniciando elección. id=1
+[2026-05-30 00:20:49.706] [INFO   ] [svJuegos-1] [BULLY] t=2 ELECTION enviado a nodo-2
+[2026-05-30 00:20:49.716] [INFO   ] [svJuegos-1] [BULLY] t=5 OK recibido de nodo-2
+[2026-05-30 00:20:49.736] [INFO   ] [svJuegos-1] [BULLY] t=8 COORDINATOR recibido, nuevo coordinador=2
+[2026-05-30 00:20:58.268] [INFO   ] [svJuegos-1] [JUEGOS] op=AGREGAR_SALDO rId=s1
+[2026-05-30 00:20:58.274] [INFO   ] [svJuegos-1] [LAMPORT] t=17 op=AGREGAR_SALDO

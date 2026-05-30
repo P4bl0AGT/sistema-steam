@@ -1,248 +1,180 @@
 # Sistema Steam Distribuido
+### ICI-4344 Computación Paralela y Distribuida – PUCV
 
-Sistema de gestión de activos digitales distribuido, desarrollado en Java. Implementa alta disponibilidad mediante replicación, balanceo de carga Round-Robin y concurrencia controlada con exclusión mutua.
+Sistema de gestión de activos digitales (tipo Steam) implementado en Java con
+comunicación TCP, persistencia replicada y coordinación distribuida.
 
 ---
 
 ## Requisitos previos
 
-| Herramienta | Versión mínima | Verificar con |
-|-------------|---------------|---------------|
-| Java (JDK)  | 17 o superior | `java -version` |
-| PowerShell  | 5.1 o superior | `$PSVersionTable.PSVersion` |
-| Conexión a internet | Solo la primera vez (descarga Gson) | — |
+| Herramienta | Versión mínima |
+|-------------|----------------|
+| Java        | 17 (probado con OpenJDK 25) |
+| PowerShell  | 7+ |
 
-> **Java 17+ es obligatorio.** El proyecto fue probado con OpenJDK 25. Si tenés Java 8 o 11, actualizá primero.
-
----
-
-## Estructura del proyecto
-
-```
-sistema-steam/
-│
-├── src/main/java/com/steam/
-│   ├── common/          # Protocolo, persistencia, logging, validación de tokens
-│   ├── models/          # Modelos de datos (Usuario, Juego, Reserva, Mensaje…)
-│   ├── proxy/           # Proxy.java — balanceador Round-Robin + health check
-│   ├── servidores/      # svSesiones, svJuegos, svMensajeria, GestorLocks
-│   └── cliente/         # ClienteJava.java — interfaz de consola
-│
-├── data/                # Bases de datos en JSON (.txt) — Main + Copy por servicio
-├── logs/                # Logs de cada componente (se crean al ejecutar)
-├── lib/                 # gson-2.10.1.jar (se descarga automáticamente)
-├── scripts/             # Scripts de compilación y ejecución
-└── sistema-steam.jar    # JAR compilado (se genera con el build)
-```
+No se requiere Maven; el script descarga Gson automáticamente.
 
 ---
 
-## Paso 1 — Compilar el proyecto
-
-Abrí **PowerShell** en la carpeta raíz del proyecto y ejecutá:
+## Compilar
 
 ```powershell
 .\scripts\1_build.ps1
 ```
 
-Este script:
-1. Descarga `gson-2.10.1.jar` a `lib/` (solo la primera vez, requiere internet).
-2. Compila los 21 archivos `.java`.
-3. Genera `sistema-steam.jar`.
-
-Salida esperada:
-```
-[OK] Gson ya existe en lib/
-
-Compilando 21 archivos Java...
-[OK] Compilacion exitosa.
-
-Generando sistema-steam.jar...
-[OK] sistema-steam.jar creado.
-```
-
-> Si ves errores de compilación, verificá que `java` y `javac` estén en el PATH (`java -version`).
-
 ---
 
-## Paso 2 — Iniciar los servidores
+## Arrancar el sistema (orden obligatorio)
 
-Cada servidor debe abrirse en **su propia ventana** haciendo doble clic en el `.bat` correspondiente (o ejecutándolo desde la consola). El **orden importa**: los servidores deben estar corriendo **antes** de iniciar el Proxy.
+| # | Script                    | Puerto(s)              | Descripción                        |
+|---|---------------------------|------------------------|------------------------------------|
+| 2 | `2_run_sesiones1.bat`     | 8081                   | svSesiones Nodo 1                  |
+| 3 | `3_run_sesiones2.bat`     | 8181                   | svSesiones Nodo 2 (espejo)         |
+| 4 | `4_run_juegos1.bat`       | 8082 / 9082 / 9182     | svJuegos Nodo 1 + Bully + Mutex    |
+| 5 | `5_run_juegos2.bat`       | 8282 / 9282 / 9382     | svJuegos Nodo 2 + Bully + Mutex    |
+| 6 | `6_run_mensajeria1.bat`   | 8083                   | svMensajeria Nodo 1                |
+| 7 | `7_run_mensajeria2.bat`   | 8383                   | svMensajeria Nodo 2 (espejo)       |
+| 8 | `8_run_proxy.bat`         | 8080                   | Proxy (Balanceador)                |
+| 9 | `9_run_cliente.bat`       | —                      | Cliente interactivo                |
 
-### Orden de inicio
-
-```
-scripts/
-  2_run_sesiones1.bat    ← Nodo 1 de Sesiones   (puerto 8081)
-  3_run_sesiones2.bat    ← Nodo 2 de Sesiones   (puerto 8181)
-  4_run_juegos1.bat      ← Nodo 1 de Juegos     (puerto 8082)
-  5_run_juegos2.bat      ← Nodo 2 de Juegos     (puerto 8282)
-  6_run_mensajeria1.bat  ← Nodo 1 de Mensajería (puerto 8083)
-  7_run_mensajeria2.bat  ← Nodo 2 de Mensajería (puerto 8383)
-  8_run_proxy.bat        ← Proxy / Balanceador   (puerto 8080)  ← iniciar ÚLTIMO
-```
-
-> **Mínimo funcional:** Para probar con un solo nodo por servicio podés iniciar solo los scripts `2`, `4`, `6` y `8`. Los scripts `3`, `5` y `7` son los nodos espejo para alta disponibilidad.
-
-Cuando un servidor arranca correctamente, verás en su ventana:
-
-```
-=== svSesiones iniciado en puerto 8081 ===
-```
-
-```
-=== svJuegos iniciado en puerto 8082 ===
-[JUEGOS] GestorLocks daemon iniciado
-```
-
-```
-=== Proxy iniciado en puerto 8080 ===
-[HEALTH] Health Check iniciado (intervalo 10s)
-```
-
----
-
-## Paso 3 — Iniciar el cliente
-
-Con todos los servidores corriendo, abrí otra ventana y ejecutá:
-
-```
-scripts/9_run_cliente.bat
-```
-
-Verás la pantalla de inicio:
-
-```
-╔══════════════════════════════════════╗
-║       SISTEMA STEAM DISTRIBUIDO      ║
-╚══════════════════════════════════════╝
-Proxy: localhost:8080
-
-──── ACCESO ────
-1. Iniciar sesión
-2. Ver catálogo (público)
-0. Salir
-Opción:
-```
+> **Importante:** iniciar los servidores (2-7) **antes** del Proxy (8).
 
 ---
 
 ## Usuarios por defecto
 
-Al iniciar por primera vez, los servidores crean automáticamente estos usuarios:
-
-| Usuario | Contraseña | Rol | Saldo inicial |
-|---------|-----------|-----|--------------|
-| `admin` | `admin123` | ADMINISTRADOR | $0 |
-| `vendedor1` | `pass123` | VENDEDOR | $0 |
-| `cliente1` | `pass123` | COMPRADOR | $500 |
-| `cliente2` | `pass123` | COMPRADOR | $200 |
-
-### Catálogo inicial
-
-| Juego | Precio | Stock |
-|-------|--------|-------|
-| Counter-Strike 2 | $29.99 | 50 |
-| Cyberpunk 2077 | $59.99 | 20 |
-| Stardew Valley | $14.99 | 100 |
+| Usuario   | Contraseña | Rol           | Saldo |
+|-----------|-----------|---------------|-------|
+| admin     | admin123  | ADMINISTRADOR | $0    |
+| vendedor1 | pass123   | VENDEDOR      | $0    |
+| cliente1  | pass123   | COMPRADOR     | $500  |
+| cliente2  | pass123   | COMPRADOR     | $200  |
 
 ---
 
-## Guía de uso por rol
+## Resetear base de datos
 
-### COMPRADOR (`cliente1` / `cliente2`)
-
+```powershell
+.\scripts\reset_datos.ps1   # escribe RESET cuando lo pida
 ```
-──── [COMPRADOR: cliente1] ────
-1. Ver catálogo y comprar
-2. Mis reservas pendientes
-3. Cancelar una reserva
-4. Ver saldo de billetera
-5. Mis compras
-6. Enviar mensaje
-7. Ver mensajes recibidos
-8. Ver conversación
-9. Cambiar contraseña
-0. Cerrar sesión
-```
-
-**Flujo de compra:**
-1. Elegí `1` → Ver catálogo y comprar.
-2. El sistema muestra la lista numerada de juegos disponibles.
-3. Ingresá el número del juego que querés.
-4. El sistema crea una reserva con **5 minutos de vigencia**.
-5. El sistema pregunta `¿Pagar ahora? (s/n)`.
-   - `s` → confirma el pago de inmediato.
-   - `n` → la reserva queda pendiente; podés confirmarla desde la opción `2`.
-
-```
-╔══════════════════════════════════════════════════╗
-║ #   Nombre                 Precio   Stock        ║
-╠══════════════════════════════════════════════════╣
-║ 1   Counter-Strike 2       $29.99   50           ║
-║ 2   Cyberpunk 2077         $59.99   20           ║
-║ 3   Stardew Valley         $14.99   100          ║
-╚══════════════════════════════════════════════════╝
-
-Elige un número (0 para cancelar): 1
-[✓] Reserva creada para 'Counter-Strike 2'
-    Precio : $29.99
-    Tienes : 299s para confirmar el pago
-¿Pagar ahora? (s/n): s
-[✓] Compra Exitosa
-    Juego adquirido : Counter-Strike 2
-    Pagado          : $29.99
-    Saldo restante  : $470.01
-```
-
-> Si no confirmás en 5 minutos, la reserva expira y el stock se libera automáticamente.
 
 ---
 
-### VENDEDOR (`vendedor1`)
+## Puertos del sistema
+
+### Servicios principales
+
+| Componente      | Puerto |
+|-----------------|--------|
+| Proxy           | 8080   |
+| svSesiones-1    | 8081   |
+| svSesiones-2    | 8181   |
+| svJuegos-1      | 8082   |
+| svJuegos-2      | 8282   |
+| svMensajeria-1  | 8083   |
+| svMensajeria-2  | 8383   |
+
+### Coordinación distribuida (Proyecto Final)
+
+| Componente      | Puerto servicio | Puerto Bully | Puerto Mutex |
+|-----------------|-----------------|--------------|--------------|
+| svJuegos Nodo 1 | 8082            | 9082         | 9182         |
+| svJuegos Nodo 2 | 8282            | 9282         | 9382         |
+
+---
+
+## Proyecto Final — Funcionalidades avanzadas
+
+### 1. Relojes de Lamport
+
+Cada componente mantiene un `RelojLamport` thread-safe con CAS-loop.
+El campo `lamportClock` viaja en cada `MensajeProtocolo`.
+Los logs muestran `[LAMPORT] t=N op=OPERACION` con N estrictamente creciente.
+`VER_CONVERSACION` ordena mensajes por `lamportClock` (orden causal, no de sistema).
+
+### 2. Algoritmo Bully
+
+Al arrancar, los nodos de svJuegos ejecutan una elección automática:
 
 ```
-1. Ver catálogo
-2. Publicar juego
-3. Mis juegos publicados
-4. Modificar juego
-5. Eliminar juego
-6. Ver saldo (ingresos)
-7. Ver historial de ventas
-...
+[BULLY] t=1  Iniciando elección. id=1
+[BULLY] t=2  ELECTION enviado a nodo-2
+[BULLY] t=3  OK recibido de nodo-2
+[BULLY] t=5  COORDINATOR recibido, nuevo coordinador=2
 ```
 
-**Publicar un juego:**
-1. Elegí `2` → Publicar juego.
-2. Ingresá nombre, descripción, precio y stock.
-3. El juego queda disponible en el catálogo de inmediato.
+El no-coordinador envía `HEARTBEAT_COORD` cada 5 s. Si falla → re-elección:
 
-Cada vez que alguien compra un juego tuyo, el precio se acredita en tu billetera.
+```
+[BULLY] Coordinador 2 caído, iniciando elección
+[BULLY] t=N  SOY COORDINADOR (id=1)
+```
+
+### 3. Exclusión Mutua Centralizada
+
+Nodo no-coordinador: `requestLock("stock") → GRANT → operación → releaseLock`.
+Coordinador: entra directo a `synchronized(lock)` local.
+
+```
+[MUTEX] t=N REQUEST encolado para nodo-2 recurso=stock
+[MUTEX] t=M GRANT recurso=stock solicitante=nodo-2
+[MUTEX] t=P RELEASE recurso=stock por nodo-2
+```
+
+### 4. Prueba de Carga
+
+```
+# Terminal A
+.\scripts\10_run_generador_carga.bat    # 50 hilos, 60s
+
+# Terminal B (a los 30s)
+.\scripts\11_run_falla_inducida.bat     # mata al coordinador
+```
+
+Reporte final en `logs/carga_<timestamp>.log`:
+
+```
+══════════════════════════════════════
+REPORTE FINAL DE CARGA
+══════════════════════════════════════
+Duración          : 60s
+Total peticiones  : 2450
+Throughput        : 40.8 req/s
+Latencia promedio : 87.3 ms
+Latencia p95      : 210 ms
+Peticiones error  : 38 (1.6%)
+══════════════════════════════════════
+```
 
 ---
 
-### ADMINISTRADOR (`admin`)
+## Logs
 
-```
-1. Ver catálogo
-2. Registrar usuario
-3. Listar usuarios
-4. Agregar saldo a usuario
-5. Ver estadísticas del sistema
-6. Ver historial de ventas
-7. Eliminar juego
-...
+```powershell
+# Seguir log en tiempo real
+Get-Content logs\svJuegos-1_0.log -Tail 50 -Wait
+
+# Menú interactivo
+.\scripts\ver_logs.bat
 ```
 
-**Registrar un nuevo usuario:**
-1. Elegí `2` → Registrar usuario.
-2. Ingresá username, contraseña y rol (`COMPRADOR`, `VENDEDOR` o `ADMINISTRADOR`).
-
-**Agregar saldo:**
-1. Elegí `4` → Agregar saldo a usuario.
-2. Ingresá el username destino y el monto.
-
-**Ver estadísticas:**
-Muestra total de juegos, ventas, ingresos acumulados, reservas activas y saldo de todas las billeteras.
+Archivos: `logs/<componente>_0.log` (rotación 5 MB × 5 archivos, append).
 
 ---
+
+## Arquitectura
+
+```
+ClienteJava ──TCP──► Proxy:8080 ──Round-Robin──► svSesiones (8081/8181)
+                                              ──► svJuegos   (8082/8282)
+                                              ──► svMensajeria(8083/8383)
+
+svJuegos-1 ◄──Bully(9082/9282)──► svJuegos-2
+svJuegos-1 ◄──Mutex(9182/9382)──► svJuegos-2
+
+svJuegos/Mensajeria ──ValidarToken──► svSesiones (directo, sin Proxy)
+
+Persistencia: data/*.txt  Main + Copy (escritura ATOMIC_MOVE)
+Membresía:    data/MEMBRESIA.txt (actualizada por Proxy en health-check)
+```

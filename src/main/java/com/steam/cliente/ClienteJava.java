@@ -2,6 +2,7 @@ package com.steam.cliente;
 
 import com.steam.common.Constantes;
 import com.steam.common.MensajeProtocolo;
+import com.steam.common.RelojLamport;
 
 import java.io.*;
 import java.net.*;
@@ -31,7 +32,9 @@ public class ClienteJava {
     /** Número visible → reservaId interno */
     private static final Map<Integer, String> reservaIdxMap  = new LinkedHashMap<>();
 
-    private static final Scanner sc = new Scanner(System.in);
+    private static final Scanner       sc           = new Scanner(System.in);
+    /** Reloj de Lamport del cliente — tick al enviar, update al recibir. */
+    private static final RelojLamport  reloj        = new RelojLamport();
 
     // ── Punto de entrada ──────────────────────────────────────────────────────
 
@@ -420,14 +423,8 @@ public class ClienteJava {
 
     @SuppressWarnings("unchecked")
     private static void modificarJuego() {
-        // Reutilizar el mapa de juegos ya cargado, o re-fetchar
-        if (juegoIdxMap.isEmpty()) {
-            System.out.println("[i] Cargando catálogo...");
-            if (fetchJuegos() == null) return;
-        } else {
-            // Mostrar los que ya tenemos en mapa
-            System.out.println("[i] Usa el catálogo más reciente cargado en esta sesión.");
-        }
+        // Siempre re-fetchar para evitar usar un mapa vacío o desactualizado
+        if (fetchJuegos() == null) return;
 
         System.out.print("Número del juego a modificar (0 = cancelar): ");
         int op;
@@ -454,9 +451,8 @@ public class ClienteJava {
     }
 
     private static void eliminarJuego() {
-        if (juegoIdxMap.isEmpty()) {
-            if (fetchJuegos() == null) return;
-        }
+        // Siempre re-fetchar para evitar usar un mapa vacío o desactualizado
+        if (fetchJuegos() == null) return;
         System.out.print("Número del juego a eliminar (0 = cancelar): ");
         int op;
         try { op = Integer.parseInt(sc.nextLine().trim()); } catch (NumberFormatException e) { return; }
@@ -554,6 +550,8 @@ public class ClienteJava {
     // ── Transporte TCP ────────────────────────────────────────────────────────
 
     private static MensajeProtocolo enviar(MensajeProtocolo req) {
+        // Evento de envío: estampar reloj Lamport antes de enviar
+        req.setLamportClock(reloj.tick());
         try (Socket socket = new Socket(Constantes.HOST, Constantes.PUERTO_PROXY)) {
             socket.setSoTimeout(Constantes.TIMEOUT_MS);
             PrintWriter   out = new PrintWriter(
@@ -562,7 +560,13 @@ public class ClienteJava {
                     new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
             out.println(req.toJson());
             String respJson = in.readLine();
-            return respJson != null ? MensajeProtocolo.fromJson(respJson) : null;
+            if (respJson != null) {
+                MensajeProtocolo resp = MensajeProtocolo.fromJson(respJson);
+                // Evento de recepción: actualizar reloj
+                if (resp != null) reloj.update(resp.getLamportClock());
+                return resp;
+            }
+            return null;
         } catch (ConnectException e) {
             System.out.println("[RED] No se puede conectar al Proxy. ¿Está iniciado?");
         } catch (SocketTimeoutException e) {

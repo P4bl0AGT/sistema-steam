@@ -1,1 +1,31 @@
-{"mensajes":[]}
+{
+  "mensajes": [
+    {
+      "id": "08377325-8cc1-46c9-a900-7a9c9a85c4e7",
+      "emisor": "cliente1",
+      "receptor": "cliente2",
+      "contenido": "hola como estas",
+      "timestamp": 1778943951503,
+      "entregado": true,
+      "leido": true
+    },
+    {
+      "id": "ddd362f0-c0f0-4df1-bd45-619cb438f1c1",
+      "emisor": "cliente1",
+      "receptor": "cliente2",
+      "contenido": "hola Joel",
+      "timestamp": 1779999038484,
+      "entregado": true,
+      "leido": true
+    },
+    {
+      "id": "f0eab6a9-8b43-4b7a-a740-42e25b511d71",
+      "emisor": "cliente2",
+      "receptor": "cliente1",
+      "contenido": "Hola Pablo",
+      "timestamp": 1779999052160,
+      "entregado": false,
+      "leido": false
+    }
+  ]
+}

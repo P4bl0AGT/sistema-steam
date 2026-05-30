@@ -1,1 +1,82 @@
-{"usuarios":[],"sesiones":[]}
+{
+  "usuarios": [
+    {
+      "username": "admin",
+      "passwordHash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+      "rol": "ADMINISTRADOR",
+      "creadoEn": 1778943738055,
+      "activo": true
+    },
+    {
+      "username": "vendedor1",
+      "passwordHash": "9b8769a4a742959a2d0298c36fb70623f2dfacda8436237df08d8dfd5b37374c",
+      "rol": "VENDEDOR",
+      "creadoEn": 1778943738056,
+      "activo": true
+    },
+    {
+      "username": "cliente1",
+      "passwordHash": "9b8769a4a742959a2d0298c36fb70623f2dfacda8436237df08d8dfd5b37374c",
+      "rol": "COMPRADOR",
+      "creadoEn": 1778943738056,
+      "activo": true
+    },
+    {
+      "username": "cliente2",
+      "passwordHash": "9b8769a4a742959a2d0298c36fb70623f2dfacda8436237df08d8dfd5b37374c",
+      "rol": "COMPRADOR",
+      "creadoEn": 1778943738056,
+      "activo": true
+    }
+  ],
+  "sesiones": [
+    {
+      "token": "140dbc1e-c08e-4739-aaa9-2474c051b591",
+      "username": "cliente1",
+      "rol": "COMPRADOR",
+      "creadoEn": 1778943824960,
+      "ultimaActividad": 1778943958473,
+      "activa": false
+    },
+    {
+      "token": "242ce44a-c5fd-4406-8263-b1c2a1074bf2",
+      "username": "cliente2",
+      "rol": "COMPRADOR",
+      "creadoEn": 1778943975343,
+      "ultimaActividad": 1778944035530,
+      "activa": false
+    },
+    {
+      "token": "663abe04-2321-44cf-aed4-089bb13745b7",
+      "username": "cliente1",
+      "rol": "COMPRADOR",
+      "creadoEn": 1779998896008,
+      "ultimaActividad": 1779999057295,
+      "activa": false
+    },
+    {
+      "token": "66f63e4d-c33e-4539-8c24-52a9932e47b2",
+      "username": "cliente2",
+      "rol": "COMPRADOR",
+      "creadoEn": 1779999026282,
+      "ultimaActividad": 1779999052155,
+      "activa": true
+    },
+    {
+      "token": "6e8a7d32-9ae0-4404-9510-3442558ab753",
+      "username": "cliente1",
+      "rol": "COMPRADOR",
+      "creadoEn": 1780114811969,
+      "ultimaActividad": 1780114812167,
+      "activa": true
+    },
+    {
+      "token": "601b8c6f-1728-414e-9719-3e211b4b5d45",
+      "username": "admin",
+      "rol": "ADMINISTRADOR",
+      "creadoEn": 1780114858144,
+      "ultimaActividad": 1780114858283,
+      "activa": true
+    }
+  ]
+}

@@ -1,1 +1,88 @@
-{"catalogo":[],"reservas":[],"ventas":[],"billeteras":{}}
+{
+  "catalogo": [
+    {
+      "id": "3ff02020-a0b5-4cc9-9e6d-3f8a65992a34",
+      "nombre": "Counter-Strike 2",
+      "descripcion": "FPS táctico multijugador",
+      "precio": 29.99,
+      "stock": 49,
+      "stockOriginal": 50,
+      "vendedor": "vendedor1",
+      "activo": true,
+      "creadoEn": 1778943747536,
+      "totalVentas": 1
+    },
+    {
+      "id": "4f4b7dbf-6069-4927-8a00-46500213cf02",
+      "nombre": "Cyberpunk 2077",
+      "descripcion": "RPG de mundo abierto futurista",
+      "precio": 59.99,
+      "stock": 19,
+      "stockOriginal": 20,
+      "vendedor": "vendedor1",
+      "activo": true,
+      "creadoEn": 1778943747536,
+      "totalVentas": 1
+    },
+    {
+      "id": "073fa0a9-3c25-4b6d-9e8d-3dc7c767f9cc",
+      "nombre": "Stardew Valley",
+      "descripcion": "Simulador de granja relajante",
+      "precio": 14.99,
+      "stock": 100,
+      "stockOriginal": 100,
+      "vendedor": "vendedor1",
+      "activo": true,
+      "creadoEn": 1778943747536,
+      "totalVentas": 0
+    }
+  ],
+  "reservas": [
+    {
+      "reservaId": "330a75c7-ade5-4ae9-b505-ab3acb16a487",
+      "juegoId": "4f4b7dbf-6069-4927-8a00-46500213cf02",
+      "juegoNombre": "Cyberpunk 2077",
+      "username": "cliente2",
+      "precio": 59.99,
+      "creadoEn": 1778944033439,
+      "expiraEn": 1778944333439,
+      "activa": false
+    },
+    {
+      "reservaId": "c121de1d-e92c-4753-8b3b-9ddac847d966",
+      "juegoId": "3ff02020-a0b5-4cc9-9e6d-3f8a65992a34",
+      "juegoNombre": "Counter-Strike 2",
+      "username": "cliente1",
+      "precio": 29.99,
+      "creadoEn": 1779998914529,
+      "expiraEn": 1779999214529,
+      "activa": false
+    }
+  ],
+  "ventas": [
+    {
+      "ventaId": "c210f300-3f64-4160-b979-91206b86e4c6",
+      "juegoId": "4f4b7dbf-6069-4927-8a00-46500213cf02",
+      "juegoNombre": "Cyberpunk 2077",
+      "comprador": "cliente2",
+      "vendedor": "vendedor1",
+      "precio": 59.99,
+      "timestamp": 1778944035538
+    },
+    {
+      "ventaId": "360e0298-890f-45ef-aac6-4a9ecdc33cef",
+      "juegoId": "3ff02020-a0b5-4cc9-9e6d-3f8a65992a34",
+      "juegoNombre": "Counter-Strike 2",
+      "comprador": "cliente1",
+      "vendedor": "vendedor1",
+      "precio": 29.99,
+      "timestamp": 1779998916425
+    }
+  ],
+  "billeteras": {
+    "cliente1": 470.01,
+    "cliente2": 150.01,
+    "vendedor1": 89.98,
+    "admin": 0.0
+  }
+}

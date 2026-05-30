@@ -48,7 +48,29 @@ public final class Constantes {
     public static final String VER_CONVERSACION  = "VER_CONVERSACION";
 
     // ── Sistema ───────────────────────────────────────────────────────────────
-    public static final String HEALTH_CHECK      = "HEALTH_CHECK";
+    public static final String HEALTH_CHECK            = "HEALTH_CHECK";
+    public static final String QUIEN_ES_COORDINADOR    = "QUIEN_ES_COORDINADOR";
+    public static final String SHUTDOWN_GRACEFUL       = "SHUTDOWN_GRACEFUL";
+
+    // ── Coordinación Bully / Mutex ────────────────────────────────────────────
+    public static final int    PUERTO_JUE_1_BULLY      = 9082;
+    public static final int    PUERTO_JUE_2_BULLY      = 9282;
+    public static final int    PUERTO_JUE_1_MUTEX      = 9182;
+    public static final int    PUERTO_JUE_2_MUTEX      = 9382;
+
+    public static final int    TIMEOUT_BULLY_OK_MS     = 3_000;
+    public static final int    TIMEOUT_BULLY_COORD_MS  = 5_000;
+    public static final int    TIMEOUT_MUTEX_MS        = 10_000;
+    public static final int    HEARTBEAT_COORD_MS      = 5_000;
+
+    // ── Operaciones de coordinación (enrutadas a JUEGOS por el Proxy) ─────────
+    public static final String BULLY_MSG               = "BULLY_MSG";
+    public static final String MUTEX_REQUEST           = "MUTEX_REQUEST";
+    public static final String MUTEX_GRANT             = "MUTEX_GRANT";
+    public static final String MUTEX_RELEASE           = "MUTEX_RELEASE";
+
+    // ── Membresía ─────────────────────────────────────────────────────────────
+    public static final String MEMBRESIA_FILE          = "data/MEMBRESIA.txt";
 
     // ── Roles ─────────────────────────────────────────────────────────────────
     public static final String ROL_COMPRADOR     = "COMPRADOR";

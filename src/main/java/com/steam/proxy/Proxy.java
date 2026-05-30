@@ -1,9 +1,8 @@
 package com.steam.proxy;
 
-import com.steam.common.Constantes;
-import com.steam.common.GestorLog;
-import com.steam.common.MensajeProtocolo;
-import com.steam.common.Utils;
+import com.steam.common.*;
+import com.steam.coordinacion.EstadoNodo;
+import com.steam.coordinacion.RegistroMembresia;
 
 import java.io.*;
 import java.net.*;
@@ -32,7 +31,9 @@ import java.util.logging.*;
  */
 public class Proxy {
 
-    private static final Logger LOG = Logger.getLogger(Proxy.class.getName());
+    private static final Logger          LOG          = Logger.getLogger(Proxy.class.getName());
+    private static final RelojLamport    relojLamport = new RelojLamport();
+    private static final RegistroMembresia membresia  = new RegistroMembresia();
 
     // ── Representación de un nodo ─────────────────────────────────────────────
 
@@ -158,15 +159,23 @@ public class Proxy {
             }
         }
 
-        // Intentar cada nodo empezando por el elegido por Round-Robin
-        int inicio = Math.abs(rr.getAndIncrement()) % nodos.size();
+        // Round-Robin seguro: Math.abs(Integer.MIN_VALUE) == Integer.MIN_VALUE (negativo),
+        // por lo que usar solo Math.abs puede producir índice negativo al desbordarse.
+        // La expresión (x % n + n) % n garantiza resultado positivo para cualquier x.
+        int inicio = ((rr.getAndIncrement() % nodos.size()) + nodos.size()) % nodos.size();
         for (int i = 0; i < nodos.size(); i++) {
             Nodo nodo = nodos.get((inicio + i) % nodos.size());
             if (!nodo.activo.get()) continue;
 
             try {
+                // Evento de envío: tick Lamport antes de reenviar al servidor
+                req.setLamportClock(relojLamport.tick());
+                LOG.fine("[LAMPORT-PROXY] t=" + req.getLamportClock() + " → nodo=" + nodo.nombre);
                 MensajeProtocolo resp = reenviar(req, nodo.puerto);
-                if (resp != null) return resp;
+                if (resp != null) {
+                    relojLamport.update(resp.getLamportClock());
+                    return resp;
+                }
             } catch (Exception e) {
                 LOG.warning("[PROXY] Nodo " + nodo.nombre + " falló: " + e.getMessage());
                 nodo.activo.set(false); // marcado caído hasta el próximo health check
@@ -223,8 +232,16 @@ public class Proxy {
 
                     if (nodo.activo.get() != ok) {
                         nodo.activo.set(ok);
-                        LOG.info("[HEALTH] Nodo " + nodo.nombre +
-                                (ok ? " ACTIVO" : " CAÍDO"));
+                        long t = relojLamport.tick();
+                        LOG.info("[HEALTH] Nodo " + nodo.nombre + (ok ? " ACTIVO" : " CAÍDO"));
+                        LOG.info("[MEMBRESIA] t=" + t + " Nodo " + nodo.nombre
+                                + (ok ? " JOINED" : " LEFT"));
+                        // Actualizar registro de membresía
+                        EstadoNodo estado = new EstadoNodo(
+                                nodo.puerto, Constantes.HOST, nodo.puerto, 0, 0, t);
+                        estado.activo = ok;
+                        if (ok) membresia.registrar(estado);
+                        else    membresia.marcarCaido(nodo.puerto);
                     }
                 }
             }

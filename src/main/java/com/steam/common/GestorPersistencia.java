@@ -9,23 +9,21 @@ import java.nio.file.*;
 import java.util.logging.Logger;
 
 /**
- * Gestor de persistencia genérico con replicación Main → Copy.
+ * Gestor de persistencia genérico. Escribe solo en Main por transacción.
+ * Copy se actualiza periódicamente por GestorSnapshot (cada 30s).
  *
- * CONCURRENCIA: todos los métodos públicos son synchronized sobre 'this'
- * para garantizar que ningún hilo lea un estado parcialmente escrito y que
- * la replicación sea atómica desde el punto de vista del servidor.
+ * CONCURRENCIA: todos los métodos públicos son synchronized sobre 'this'.
  *
  * MODELO DE FALLOS:
- *  - Si Main falla al leer → intenta Copy (fallo de persistencia).
- *  - Toda escritura en Main se replica inmediatamente en Copy.
+ *  - Si Main falla al leer → intenta Copy (snapshot de hace máx. 30s).
  */
 public class GestorPersistencia<T> {
 
     private static final Logger LOG  = Logger.getLogger(GestorPersistencia.class.getName());
     private static final Gson   GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    private final String  pathMain;
-    private final String  pathCopy;
+    private final String   pathMain;
+    private final String   pathCopy;
     private final Class<T> tipo;
 
     public GestorPersistencia(String pathMain, String pathCopy, Class<T> tipo) {
@@ -65,14 +63,13 @@ public class GestorPersistencia<T> {
     // ── Escribir ──────────────────────────────────────────────────────────────
 
     /**
-     * Escribe en Main y replica inmediatamente en Copy.
-     * Si la escritura en Main falla, lanza excepción para que el servidor
-     * pueda manejar el error; Copy se actualiza solo si Main tuvo éxito.
+     * Escribe en Main. Copy se actualiza periódicamente por GestorSnapshot.
+     * Si la escritura falla, lanza excepción para que el servidor la maneje.
      */
     public synchronized void guardar(T datos) throws IOException {
         String json = GSON.toJson(datos);
-        escribirEnArchivo(pathMain, json);   // primero Main
-        escribirEnArchivo(pathCopy, json);   // replicación inmediata
+        escribirEnArchivo(pathMain, json);
+        // Copy se actualiza cada 30s por GestorSnapshot — no aquí.
     }
 
     private void escribirEnArchivo(String path, String json) throws IOException {
@@ -81,8 +78,15 @@ public class GestorPersistencia<T> {
         Path temporal = Path.of(path + ".tmp");
         Files.writeString(temporal, json, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-        Files.move(temporal, destino, StandardCopyOption.REPLACE_EXISTING,
-                StandardCopyOption.ATOMIC_MOVE);
+        try {
+            Files.move(temporal, destino, StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException e) {
+            // ATOMIC_MOVE no está disponible entre filesystems distintos (ej. Docker, algunas
+            // distribuciones Linux). Se hace el move sin atomicidad como fallback.
+            LOG.warning("ATOMIC_MOVE no soportado en " + path + "; usando REPLACE_EXISTING sin atomicidad.");
+            Files.move(temporal, destino, StandardCopyOption.REPLACE_EXISTING);
+        }
     }
 
     // ── Inicialización ────────────────────────────────────────────────────────

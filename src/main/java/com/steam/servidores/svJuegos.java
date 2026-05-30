@@ -1,7 +1,10 @@
 package com.steam.servidores;
 
 import com.steam.common.*;
+import com.steam.coordinacion.*;
 import com.steam.models.*;
+
+// ReplicadorServidor y ReplicadorCliente ya están en com.steam.coordinacion.*
 
 import java.io.*;
 import java.net.*;
@@ -39,23 +42,34 @@ import java.util.stream.Collectors;
  */
 public class svJuegos {
 
-    private static final Logger LOG = Logger.getLogger(svJuegos.class.getName());
+    private static final Logger      LOG          = Logger.getLogger(svJuegos.class.getName());
+    /** Reloj de Lamport compartido por todos los hilos de esta instancia. */
+    private static final RelojLamport relojLamport = new RelojLamport();
 
-    private final int                         puerto;
+    private final int                          puerto;
+    private final int                          miId;   // nodo 1 o 2
     private final GestorPersistencia<BDJuegos> gp;
-    private final ExecutorService             pool = Executors.newFixedThreadPool(Constantes.POOL_SIZE);
-    private final Object                      lock = new Object(); // monitor compartido con GestorLocks
+    private final ExecutorService              pool = Executors.newFixedThreadPool(Constantes.POOL_SIZE);
+    private final Object                       lock = new Object(); // monitor compartido con GestorLocks
+
+    // ── Coordinación distribuida ──────────────────────────────────────────────
+    private GestorBully               bully;
+    private GestorMutexCentralizado   mutex;
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    public svJuegos(int puerto) {
+    public svJuegos(int nodo, int puerto) {
+        this.miId   = nodo;
         this.puerto = puerto;
         this.gp     = new GestorPersistencia<>(
                 Constantes.GME_MAIN, Constantes.GME_COPY, BDJuegos.class);
 
-        // Sembrar datos iniciales si el catálogo está vacío
+        // Sembrar solo si AMBOS archivos (Main y Copy) están ausentes o vacíos.
+        // Si el Nodo 1 ya escribió Main+Copy, el Nodo 2 verá al menos uno no vacío
+        // y no re-sembrará, evitando entradas duplicadas por arranque simultáneo.
         BDJuegos bd = gp.leer();
-        if (bd == null || bd.catalogo.isEmpty()) {
+        if (archivoVacio(Constantes.GME_MAIN) && archivoVacio(Constantes.GME_COPY)
+                && (bd == null || bd.catalogo.isEmpty())) {
             if (bd == null) bd = new BDJuegos();
             bd.catalogo.add(new Juego(uuid(), "Counter-Strike 2",
                     "FPS táctico multijugador", 29.99, 50, "vendedor1"));
@@ -77,7 +91,30 @@ public class svJuegos {
         int nodo   = args.length > 0 ? Integer.parseInt(args[0]) : 1;
         int puerto = (nodo == 2) ? Constantes.PUERTO_JUE_2 : Constantes.PUERTO_JUE_1;
         GestorLog.configurar("svJuegos-" + nodo);
-        svJuegos sv = new svJuegos(puerto);
+
+        svJuegos sv = new svJuegos(nodo, puerto);
+
+        // ── Configurar Bully y Mutex ──────────────────────────────────────────
+        int   puertoBully = (nodo == 2) ? Constantes.PUERTO_JUE_2_BULLY : Constantes.PUERTO_JUE_1_BULLY;
+        int   puertoMutex = (nodo == 2) ? Constantes.PUERTO_JUE_2_MUTEX : Constantes.PUERTO_JUE_1_MUTEX;
+
+        // Peer es el otro nodo
+        int          peerId      = (nodo == 1) ? 2 : 1;
+        int          peerBully   = (nodo == 1) ? Constantes.PUERTO_JUE_2_BULLY : Constantes.PUERTO_JUE_1_BULLY;
+        int          peerMutex   = (nodo == 1) ? Constantes.PUERTO_JUE_2_MUTEX : Constantes.PUERTO_JUE_1_MUTEX;
+        List<NodoInfo> peers     = List.of(new NodoInfo(peerId, Constantes.HOST, peerBully, peerMutex));
+
+        sv.bully = new GestorBully(nodo, puertoBully, peers, relojLamport);
+        sv.mutex = new GestorMutexCentralizado(nodo, puertoMutex, sv.bully, relojLamport, peers);
+
+        // ── Snapshot periódico: Main → Copy cada 30s (solo nodo 1) ──────────
+        if (nodo == 1) {
+            new GestorSnapshot(Constantes.GME_MAIN, Constantes.GME_COPY,
+                    "svJuegos-" + nodo, 30).start();
+        }
+
+        sv.mutex.startServidor();
+        sv.bully.start();          // lanza elección automáticamente
         sv.iniciarGestorLocks();
         sv.escuchar();
     }
@@ -116,8 +153,13 @@ public class svJuegos {
             String linea = in.readLine();
             if (linea == null) return;
 
-            MensajeProtocolo req  = MensajeProtocolo.fromJson(linea);
+            MensajeProtocolo req = MensajeProtocolo.fromJson(linea);
+            // Evento de recepción: actualizar reloj de Lamport
+            relojLamport.update(req.getLamportClock());
+
             MensajeProtocolo resp = procesar(req);
+            // Estampar reloj de Lamport en la respuesta
+            resp.setLamportClock(relojLamport.tick());
             out.println(resp.toJson());
 
         } catch (SocketTimeoutException e) {
@@ -131,10 +173,16 @@ public class svJuegos {
 
     private MensajeProtocolo procesar(MensajeProtocolo req) {
         if (req == null) return MensajeProtocolo.error("?", "Mensaje inválido");
-        LOG.info("[JUEGOS] op=" + req.getOperacion() + " rId=" + req.getRequestId());
+        // HEALTH_CHECK en FINE; resto en INFO con marca Lamport
+        boolean esHC = Constantes.HEALTH_CHECK.equals(req.getOperacion());
+        LOG.log(esHC ? java.util.logging.Level.FINE : java.util.logging.Level.INFO,
+                "[JUEGOS] op=" + req.getOperacion() + " rId=" + req.getRequestId());
+        if (!esHC) LOG.info("[LAMPORT] t=" + relojLamport.get() + " op=" + req.getOperacion());
 
         return switch (req.getOperacion()) {
-            case Constantes.HEALTH_CHECK      -> healthCheck(req);
+            case Constantes.HEALTH_CHECK          -> healthCheck(req);
+            case Constantes.QUIEN_ES_COORDINADOR  -> quienEsCoordinador(req);
+            case Constantes.SHUTDOWN_GRACEFUL     -> shutdownGraceful(req);
             case Constantes.LISTAR_JUEGOS     -> listarJuegos(req);
             case Constantes.VER_JUEGO         -> verJuego(req);
             case Constantes.COMPRAR_JUEGO     -> comprarJuego(req);
@@ -167,6 +215,27 @@ public class svJuegos {
     private MensajeProtocolo healthCheck(MensajeProtocolo req) {
         MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "svJuegos OK");
         resp.put("puerto", puerto);
+        return resp;
+    }
+
+    private MensajeProtocolo quienEsCoordinador(MensajeProtocolo req) {
+        int coord = (bully != null) ? bully.getCoordinadorActual() : -1;
+        MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "Coordinador actual");
+        resp.put("coordinadorActual", coord);
+        resp.put("soyCoordinador",    bully != null && bully.isCoordinador());
+        resp.put("miId",              miId);
+        return resp;
+    }
+
+    private MensajeProtocolo shutdownGraceful(MensajeProtocolo req) {
+        LOG.warning("[FALLA] t=" + relojLamport.get()
+                + " Nodo " + miId + " recibió SHUTDOWN, cerrando...");
+        MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "Cerrando nodo-" + miId);
+        // Responder antes de salir para que el emisor reciba ACK
+        new Thread(() -> {
+            try { Thread.sleep(200); } catch (InterruptedException ignored) {}
+            System.exit(0);
+        }, "shutdown").start();
         return resp;
     }
 
@@ -225,8 +294,19 @@ public class svJuegos {
         String juegoId  = req.getString("juegoId");
         if (juegoId == null) return MensajeProtocolo.error(req.getRequestId(), "Falta juegoId");
 
+        // ── Mutex distribuido (solo si soy no-coordinador) ────────────────────
+        boolean usaMutex = bully != null && !bully.isCoordinador()
+                           && bully.getCoordinadorActual() != -1;
+        if (usaMutex) {
+            try { mutex.requestLock("stock", miId); }
+            catch (MutexTimeoutException e) {
+                LOG.warning("[MUTEX] Timeout en COMPRAR_JUEGO: " + e.getMessage());
+                return MensajeProtocolo.error(req.getRequestId(),
+                        "Coordinador no disponible temporalmente. Reintenta.");
+            }
+        }
         // ── REGIÓN CRÍTICA: Gestión de Stock Finito ──
-        synchronized (lock) {
+        try { synchronized (lock) {
             BDJuegos bd = gp.leer();
             if (bd == null) return MensajeProtocolo.error(req.getRequestId(), "BD no disponible");
 
@@ -280,6 +360,9 @@ public class svJuegos {
             resp.put("expiraEn",        reserva.expiraEn);
             resp.put("segundosRestantes", reserva.segundosRestantes());
             return resp;
+        } } finally {
+            // Liberar mutex distribuido siempre, incluso si hubo excepción
+            if (usaMutex) mutex.releaseLock("stock", miId);
         }
     }
 
@@ -298,8 +381,18 @@ public class svJuegos {
         String reservaId = req.getString("reservaId");
         if (reservaId == null) return MensajeProtocolo.error(req.getRequestId(), "Falta reservaId");
 
+        // ── Mutex distribuido (solo si soy no-coordinador) ────────────────────
+        boolean usaMutexPago = bully != null && !bully.isCoordinador()
+                               && bully.getCoordinadorActual() != -1;
+        if (usaMutexPago) {
+            try { mutex.requestLock("stock", miId); }
+            catch (MutexTimeoutException e) {
+                return MensajeProtocolo.error(req.getRequestId(),
+                        "Coordinador no disponible. Reintenta.");
+            }
+        }
         // ── REGIÓN CRÍTICA: Finalización de Venta ──
-        synchronized (lock) {
+        try { synchronized (lock) {
             BDJuegos bd = gp.leer();
             if (bd == null) return MensajeProtocolo.error(req.getRequestId(), "BD no disponible");
 
@@ -320,6 +413,10 @@ public class svJuegos {
                 return MensajeProtocolo.error(req.getRequestId(),
                         "Tiempo agotado. La reserva expiró y el stock fue liberado.");
             }
+
+            // Inicialización defensiva: usuarios creados por el admin pueden no tener
+            // entrada explícita en billeteras hasta su primera transacción.
+            bd.billeteras.putIfAbsent(auth.username(), 0.0);
 
             // Verificar saldo
             double saldo = bd.billeteras.getOrDefault(auth.username(), 0.0);
@@ -360,6 +457,8 @@ public class svJuegos {
             resp.put("precio",       reserva.precio);
             resp.put("saldoRestante", bd.billeteras.get(auth.username()));
             return resp;
+        } } finally {
+            if (usaMutexPago) mutex.releaseLock("stock", miId);
         }
     }
 
@@ -697,4 +796,10 @@ public class svJuegos {
     }
 
     private static String uuid() { return UUID.randomUUID().toString(); }
+
+    /** Retorna true si el archivo no existe o tiene tamaño 0. */
+    private static boolean archivoVacio(String path) {
+        File f = new File(path);
+        return !f.exists() || f.length() == 0;
+    }
 }

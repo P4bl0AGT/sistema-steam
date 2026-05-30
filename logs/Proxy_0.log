@@ -78,3 +78,196 @@
 [2026-05-11 13:35:44.652] [INFO   ] [Proxy] [PROXY] LISTAR_JUEGOS → 2c25a904-2b53-4428-82a6-55fbb9e17f0d
 [2026-05-11 13:35:55.129] [INFO   ] [Proxy] [PROXY] ENVIAR_MENSAJE → 3a2579dc-4ea5-4e37-938f-a852917d053c
 [2026-05-11 13:36:19.515] [INFO   ] [Proxy] [PROXY] LOGOUT → be096a7f-4478-4c10-bf10-25e58a92bf43
+[2026-05-11 16:05:44.001] [INFO   ] [Proxy] ════════════════════════════════════
+  Componente  : Proxy
+  Log archivo : logs/Proxy_0.log
+════════════════════════════════════
+[2026-05-11 16:05:44.033] [INFO   ] [Proxy] [HEALTH] Health Check iniciado (intervalo 10s)
+[2026-05-11 16:05:44.033] [INFO   ] [Proxy] === Proxy iniciado en puerto 8080 ===
+[2026-05-11 16:05:47.783] [INFO   ] [Proxy] ════════════════════════════════════
+  Componente  : Proxy
+  Log archivo : logs/Proxy_0.log
+════════════════════════════════════
+[2026-05-11 16:05:47.816] [INFO   ] [Proxy] [HEALTH] Health Check iniciado (intervalo 10s)
+[2026-05-11 16:05:47.816] [INFO   ] [Proxy] === Proxy iniciado en puerto 8080 ===
+[2026-05-11 16:05:57.945] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 CAÍDO
+[2026-05-11 16:07:43.737] [INFO   ] [Proxy] ════════════════════════════════════
+  Componente  : Proxy
+  Log archivo : logs/Proxy_0.log
+════════════════════════════════════
+[2026-05-11 16:07:43.767] [INFO   ] [Proxy] [HEALTH] Health Check iniciado (intervalo 10s)
+[2026-05-11 16:07:43.768] [INFO   ] [Proxy] === Proxy iniciado en puerto 8080 ===
+[2026-05-11 16:07:58.849] [INFO   ] [Proxy] [HEALTH] Nodo SES-1 CAÍDO
+[2026-05-11 16:08:39.000] [INFO   ] [Proxy] [PROXY] LOGIN → 873f3a63-a7a1-47db-9875-f8b306eb804d
+[2026-05-11 16:09:43.020] [INFO   ] [Proxy] ════════════════════════════════════
+  Componente  : Proxy
+  Log archivo : logs/Proxy_0.log
+════════════════════════════════════
+[2026-05-11 16:09:43.053] [INFO   ] [Proxy] [HEALTH] Health Check iniciado (intervalo 10s)
+[2026-05-11 16:09:43.053] [INFO   ] [Proxy] === Proxy iniciado en puerto 8080 ===
+[2026-05-11 16:09:53.175] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 CAÍDO
+[2026-05-11 16:09:53.176] [INFO   ] [Proxy] [HEALTH] Nodo JUE-1 CAÍDO
+[2026-05-11 16:09:53.176] [INFO   ] [Proxy] [HEALTH] Nodo JUE-2 CAÍDO
+[2026-05-11 16:09:53.177] [INFO   ] [Proxy] [HEALTH] Nodo MSG-1 CAÍDO
+[2026-05-11 16:09:53.178] [INFO   ] [Proxy] [HEALTH] Nodo MSG-2 CAÍDO
+[2026-05-11 16:10:01.524] [INFO   ] [Proxy] ════════════════════════════════════
+  Componente  : Proxy
+  Log archivo : logs/Proxy_0.log
+════════════════════════════════════
+[2026-05-11 16:10:01.556] [INFO   ] [Proxy] [HEALTH] Health Check iniciado (intervalo 10s)
+[2026-05-11 16:10:01.556] [INFO   ] [Proxy] === Proxy iniciado en puerto 8080 ===
+[2026-05-11 16:10:11.678] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 CAÍDO
+[2026-05-11 16:10:11.718] [INFO   ] [Proxy] [HEALTH] Nodo JUE-2 CAÍDO
+[2026-05-11 16:10:11.762] [INFO   ] [Proxy] [HEALTH] Nodo MSG-2 CAÍDO
+[2026-05-11 16:10:51.848] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 ACTIVO
+[2026-05-11 16:13:22.128] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 CAÍDO
+[2026-05-11 16:13:46.973] [INFO   ] [Proxy] [PROXY] LOGIN → aafcbcd2-4ea0-4a68-95c6-14e22cd1db68
+[2026-05-11 16:14:25.699] [INFO   ] [Proxy] [PROXY] VER_CONVERSACION → dd1d77e3-9859-48e5-bfeb-0f1e5620ce41
+[2026-05-11 16:14:44.533] [INFO   ] [Proxy] [PROXY] LOGOUT → d8ad622b-4c4c-4a4e-a477-f99488f4fd38
+[2026-05-11 16:14:52.216] [INFO   ] [Proxy] [HEALTH] Nodo SES-1 CAÍDO
+[2026-05-11 16:14:59.970] [INFO   ] [Proxy] [PROXY] LOGIN → dc4ab78b-f5d1-4e63-ae57-2eff6e8d7fe1
+[2026-05-11 16:15:12.277] [INFO   ] [Proxy] [HEALTH] Nodo SES-1 ACTIVO
+[2026-05-11 16:15:22.454] [INFO   ] [Proxy] [PROXY] LOGIN → 48aae47e-b590-4ffb-ae39-93f39eb6e0ec
+[2026-05-11 16:15:26.577] [INFO   ] [Proxy] [PROXY] LOGIN → d7c583e8-c26f-4060-9d7d-8022d296f60c
+[2026-05-11 16:15:32.294] [INFO   ] [Proxy] [HEALTH] Nodo SES-1 CAÍDO
+[2026-05-11 16:15:40.537] [INFO   ] [Proxy] [PROXY] LISTAR_JUEGOS → dfce4b0f-2c98-4314-9ae6-61b9f89ed6a3
+[2026-05-11 16:16:15.168] [INFO   ] [Proxy] [PROXY] LOGOUT → cb2df2fe-3a36-474a-a94f-c73fbc53745a
+[2026-05-11 16:16:22.338] [INFO   ] [Proxy] [HEALTH] Nodo JUE-1 CAÍDO
+[2026-05-11 16:16:22.339] [INFO   ] [Proxy] [HEALTH] Nodo MSG-1 CAÍDO
+[2026-05-11 17:02:16.299] [INFO   ] [Proxy] ════════════════════════════════════
+  Componente  : Proxy
+  Log archivo : logs/Proxy_0.log
+════════════════════════════════════
+[2026-05-11 17:02:16.333] [INFO   ] [Proxy] [HEALTH] Health Check iniciado (intervalo 10s)
+[2026-05-11 17:02:16.334] [INFO   ] [Proxy] === Proxy iniciado en puerto 8080 ===
+[2026-05-11 17:02:26.478] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 CAÍDO
+[2026-05-11 17:02:26.527] [INFO   ] [Proxy] [HEALTH] Nodo JUE-2 CAÍDO
+[2026-05-11 17:02:26.573] [INFO   ] [Proxy] [HEALTH] Nodo MSG-2 CAÍDO
+[2026-05-11 17:02:46.634] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 ACTIVO
+[2026-05-11 17:02:56.694] [INFO   ] [Proxy] [HEALTH] Nodo JUE-2 ACTIVO
+[2026-05-11 17:03:06.764] [INFO   ] [Proxy] [HEALTH] Nodo MSG-2 ACTIVO
+[2026-05-11 17:03:23.873] [INFO   ] [Proxy] [PROXY] LOGIN → cb1a980c-89bd-41da-b996-d4114b6d9acf
+[2026-05-11 17:03:45.579] [INFO   ] [Proxy] [PROXY] LISTAR_JUEGOS → 048992ad-3132-4e61-a8d5-4449f83e238c
+[2026-05-11 17:04:39.670] [INFO   ] [Proxy] [PROXY] COMPRAR_JUEGO → bc58cccd-9b9b-48a7-b233-58056819dea9
+[2026-05-11 17:04:43.247] [INFO   ] [Proxy] [PROXY] CONFIRMAR_PAGO → 9f7bf35f-bb99-42c4-8672-8e3772af91b1
+[2026-05-11 17:06:07.758] [INFO   ] [Proxy] [PROXY] LOGOUT → dd1085b8-4753-4d5b-9252-1a4545407ae0
+[2026-05-11 19:01:28.656] [INFO   ] [Proxy] ════════════════════════════════════
+  Componente  : Proxy
+  Log archivo : logs/Proxy_0.log
+════════════════════════════════════
+[2026-05-11 19:01:28.690] [INFO   ] [Proxy] [HEALTH] Health Check iniciado (intervalo 10s)
+[2026-05-11 19:01:28.690] [INFO   ] [Proxy] === Proxy iniciado en puerto 8080 ===
+[2026-05-11 19:01:38.863] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 CAÍDO
+[2026-05-11 19:01:38.907] [INFO   ] [Proxy] [HEALTH] Nodo JUE-2 CAÍDO
+[2026-05-11 19:01:38.957] [INFO   ] [Proxy] [HEALTH] Nodo MSG-2 CAÍDO
+[2026-05-11 19:02:19.053] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 ACTIVO
+[2026-05-11 19:02:29.065] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 CAÍDO
+[2026-05-11 19:02:44.825] [INFO   ] [Proxy] [PROXY] LOGIN → 2a0b1e95-d701-4149-98c5-afc111e62df8
+[2026-05-11 19:03:21.055] [INFO   ] [Proxy] [PROXY] LOGIN → cc440706-618d-4fb9-b0d8-eba79494b4a2
+[2026-05-11 19:03:28.511] [INFO   ] [Proxy] [PROXY] ENVIAR_MENSAJE → de3ddc56-1e1f-4108-9827-0942fcffcee1
+[2026-05-11 19:03:30.219] [INFO   ] [Proxy] [PROXY] ENVIAR_MENSAJE → fb85c318-0426-4258-a89c-4ba579f3aafc
+[2026-05-11 19:03:34.729] [INFO   ] [Proxy] [PROXY] VER_MENSAJES → 3b7d6649-83a4-482a-91c1-555239631c4e
+[2026-05-11 19:03:39.042] [INFO   ] [Proxy] [PROXY] VER_MENSAJES → f4eb1d20-7527-42f7-82c5-55e40ef40095
+[2026-05-11 19:05:12.804] [INFO   ] [Proxy] [PROXY] LISTAR_JUEGOS → 57206f60-4986-4e40-8885-3146cfa49413
+[2026-05-11 19:05:18.763] [INFO   ] [Proxy] [PROXY] COMPRAR_JUEGO → fd6308ae-bf1e-49d4-9067-f843221150af
+[2026-05-11 19:05:32.957] [INFO   ] [Proxy] [PROXY] VER_MIS_RESERVAS → 390b1a96-44a2-432f-8f9e-41938ceb7ca7
+[2026-05-11 19:05:35.579] [INFO   ] [Proxy] [PROXY] VER_MIS_RESERVAS → 8134239c-aa3a-4149-9862-8240895756f2
+[2026-05-11 19:05:48.109] [INFO   ] [Proxy] [PROXY] VER_MIS_RESERVAS → a65f578b-62f7-4e43-a673-b879110c985c
+[2026-05-11 19:05:49.330] [INFO   ] [Proxy] [PROXY] CONFIRMAR_PAGO → 9752e70c-2178-47d5-90e6-a960a9d168cd
+[2026-05-11 19:05:53.379] [INFO   ] [Proxy] [PROXY] VER_MIS_COMPRAS → 54e5727b-5b7f-4f7d-8a7b-3b2b2fb00225
+[2026-05-11 19:06:05.695] [INFO   ] [Proxy] [PROXY] LOGOUT → a3804f77-6326-421a-b1f6-927ca131feb3
+[2026-05-11 19:06:15.296] [INFO   ] [Proxy] [PROXY] LOGIN → 0a42a08f-8ab4-4be2-b935-21c7b5438194
+[2026-05-11 19:06:29.582] [INFO   ] [Proxy] [PROXY] PUBLICAR_JUEGO → d5613961-0a02-473b-907d-6f1a227a81db
+[2026-05-11 19:06:32.005] [INFO   ] [Proxy] [PROXY] LISTAR_JUEGOS → c7a2e2be-296e-4276-8b88-aad4d08b61b8
+[2026-05-11 19:06:43.684] [INFO   ] [Proxy] [PROXY] LOGOUT → f9e5c752-4dbe-441c-aa1f-84a400035a8a
+[2026-05-11 19:06:55.687] [INFO   ] [Proxy] [PROXY] LOGIN → ec26ba47-8163-486e-9021-665f6832e7e8
+[2026-05-11 19:06:55.688] [WARNING] [Proxy] [PROXY] Nodo SES-1 falló: Connection refused: connect
+[2026-05-11 19:07:09.441] [INFO   ] [Proxy] [HEALTH] Nodo SES-1 ACTIVO
+[2026-05-11 19:07:14.295] [INFO   ] [Proxy] [PROXY] LOGIN → b16860fc-d94d-475c-ae35-069041ef1801
+[2026-05-11 19:07:20.412] [INFO   ] [Proxy] [PROXY] LOGOUT → 0c9651c0-c987-4139-9215-133933d492cb
+[2026-05-11 19:07:24.563] [INFO   ] [Proxy] [PROXY] LOGIN → 2ee7f002-bb24-4f09-8455-662857dffba5
+[2026-05-11 19:07:49.179] [INFO   ] [Proxy] [PROXY] REGISTRAR_USUARIO → e010d501-5617-4506-ab7f-0bc44605df07
+[2026-05-11 19:08:00.811] [INFO   ] [Proxy] [PROXY] VER_ESTADISTICAS → 75859129-f7c3-441e-bc9e-33aa6bdd92eb
+[2026-05-11 19:08:09.284] [INFO   ] [Proxy] [PROXY] VER_HISTORIAL → 95ed7a82-1577-42b7-b952-8b32b5f8e4bc
+[2026-05-11 21:27:13.261] [INFO   ] [Proxy] ════════════════════════════════════
+  Componente  : Proxy
+  Log archivo : logs/Proxy_0.log
+════════════════════════════════════
+[2026-05-11 21:27:13.293] [INFO   ] [Proxy] [HEALTH] Health Check iniciado (intervalo 10s)
+[2026-05-11 21:27:13.293] [INFO   ] [Proxy] === Proxy iniciado en puerto 8080 ===
+[2026-05-11 21:27:23.422] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 CAÍDO
+[2026-05-11 21:27:23.465] [INFO   ] [Proxy] [HEALTH] Nodo JUE-2 CAÍDO
+[2026-05-11 21:27:23.511] [INFO   ] [Proxy] [HEALTH] Nodo MSG-2 CAÍDO
+[2026-05-11 21:27:43.571] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 ACTIVO
+[2026-05-11 21:27:53.584] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 CAÍDO
+[2026-05-11 21:28:06.154] [INFO   ] [Proxy] [PROXY] LOGIN → 6467b3e7-701c-4970-9a3e-d6c66d6b5895
+[2026-05-11 21:28:09.387] [INFO   ] [Proxy] [PROXY] LOGIN → 5055f773-31e5-4c9f-a940-bbb3deb0980e
+[2026-05-16 11:02:36.308] [INFO   ] [Proxy] ════════════════════════════════════
+  Componente  : Proxy
+  Log archivo : logs/Proxy_0.log
+════════════════════════════════════
+[2026-05-16 11:02:36.340] [INFO   ] [Proxy] [HEALTH] Health Check iniciado (intervalo 10s)
+[2026-05-16 11:02:36.341] [INFO   ] [Proxy] === Proxy iniciado en puerto 8080 ===
+[2026-05-16 11:02:46.463] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 CAÍDO
+[2026-05-16 11:02:46.475] [INFO   ] [Proxy] [HEALTH] Nodo JUE-2 CAÍDO
+[2026-05-16 11:02:46.524] [INFO   ] [Proxy] [HEALTH] Nodo MSG-2 CAÍDO
+[2026-05-16 11:03:44.951] [INFO   ] [Proxy] [PROXY] LOGIN → 4536c77c-885f-4f5d-a4d5-831d284b9fba
+[2026-05-16 11:04:16.665] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 ACTIVO
+[2026-05-16 11:04:26.685] [INFO   ] [Proxy] [HEALTH] Nodo JUE-1 CAÍDO
+[2026-05-16 11:04:40.975] [INFO   ] [Proxy] [PROXY] LISTAR_JUEGOS → 7b4228f3-30bf-4393-8461-27af54f28d37
+[2026-05-16 11:05:51.478] [INFO   ] [Proxy] [PROXY] ENVIAR_MENSAJE → ab4f0514-90a1-4fe9-a569-d72f1360e6ff
+[2026-05-16 11:05:58.467] [INFO   ] [Proxy] [PROXY] VER_CONVERSACION → 2befe628-11f6-49e5-a9d3-967dca2ca1ef
+[2026-05-16 11:06:07.544] [INFO   ] [Proxy] [PROXY] LOGOUT → ddc792fc-a202-4d72-a010-dea266ed39e8
+[2026-05-16 11:06:15.340] [INFO   ] [Proxy] [PROXY] LOGIN → 994f0471-03fc-46fd-a6c8-47eff819d8fa
+[2026-05-16 11:06:18.629] [INFO   ] [Proxy] [PROXY] VER_MENSAJES → 4af15d01-ec39-4c9a-b69b-3fe91a2cee72
+[2026-05-16 11:06:29.164] [INFO   ] [Proxy] [PROXY] VER_SALDO → 68d36245-bf1e-43a0-a1e3-d890cb2ac3b9
+[2026-05-16 11:06:57.000] [INFO   ] [Proxy] [HEALTH] Nodo JUE-1 ACTIVO
+[2026-05-16 11:07:03.116] [INFO   ] [Proxy] [PROXY] VER_SALDO → 1e5c3cd0-8b96-4921-808e-eb56d452f89f
+[2026-05-16 11:07:11.577] [INFO   ] [Proxy] [PROXY] LISTAR_JUEGOS → 99f505db-d904-4231-94bf-8ef6d882e5da
+[2026-05-16 11:07:13.423] [INFO   ] [Proxy] [PROXY] COMPRAR_JUEGO → 486aa229-1948-4fd0-8fbe-fdc9b031b8e2
+[2026-05-16 11:07:15.524] [INFO   ] [Proxy] [PROXY] CONFIRMAR_PAGO → d656a65d-01bb-4ffe-876d-247f50ef0d23
+[2026-05-28 16:06:54.749] [INFO   ] [Proxy] ════════════════════════════════════
+  Componente  : Proxy
+  Log archivo : logs/Proxy_0.log
+════════════════════════════════════
+[2026-05-28 16:06:54.781] [INFO   ] [Proxy] [HEALTH] Health Check iniciado (intervalo 10s)
+[2026-05-28 16:06:54.782] [INFO   ] [Proxy] === Proxy iniciado en puerto 8080 ===
+[2026-05-28 16:07:04.929] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 CAÍDO
+[2026-05-28 16:07:04.972] [INFO   ] [Proxy] [HEALTH] Nodo JUE-2 CAÍDO
+[2026-05-28 16:07:05.019] [INFO   ] [Proxy] [HEALTH] Nodo MSG-2 CAÍDO
+[2026-05-28 16:07:25.073] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 ACTIVO
+[2026-05-28 16:07:35.087] [INFO   ] [Proxy] [HEALTH] Nodo SES-2 CAÍDO
+[2026-05-28 16:07:50.112] [INFO   ] [Proxy] [PROXY] LISTAR_JUEGOS → 97c583a4-3db7-4461-ac3b-d0ad05711775
+[2026-05-28 16:08:15.999] [INFO   ] [Proxy] [PROXY] LOGIN → 223715f9-909a-44d0-881f-807599ff369e
+[2026-05-28 16:08:27.785] [INFO   ] [Proxy] [PROXY] LISTAR_JUEGOS → cc808252-810d-46e3-b9e8-bc40422223bc
+[2026-05-28 16:08:30.855] [INFO   ] [Proxy] [PROXY] VER_MIS_RESERVAS → e98c5ae2-8eb0-4065-b775-39886acb8100
+[2026-05-28 16:08:32.251] [INFO   ] [Proxy] [PROXY] LISTAR_JUEGOS → 0c8af444-c673-4f02-8f26-ffba9eb2693c
+[2026-05-28 16:08:34.515] [INFO   ] [Proxy] [PROXY] COMPRAR_JUEGO → fd3caf01-496c-4006-9c35-c5517ff2df72
+[2026-05-28 16:08:36.411] [INFO   ] [Proxy] [PROXY] CONFIRMAR_PAGO → be573e56-4823-48b7-ad3c-ef8f61c78a0e
+[2026-05-28 16:10:26.278] [INFO   ] [Proxy] [PROXY] LOGIN → d8041abe-d2cb-4837-93fc-06cb2ed04818
+[2026-05-28 16:10:38.462] [INFO   ] [Proxy] [PROXY] ENVIAR_MENSAJE → 88044a7c-f4ab-4ed0-ab96-34ff74bd843d
+[2026-05-28 16:10:43.207] [INFO   ] [Proxy] [PROXY] VER_MENSAJES → 378cbe11-d7fc-4a4e-a884-f749fca8531c
+[2026-05-28 16:10:52.148] [INFO   ] [Proxy] [PROXY] ENVIAR_MENSAJE → d012d83f-43c3-4d4e-b1f2-1608076b1550
+[2026-05-28 16:10:57.290] [INFO   ] [Proxy] [PROXY] VER_CONVERSACION → 75e61d60-8bac-4fa4-8979-cdd96c42bbde
+[2026-05-30 00:20:07.944] [INFO   ] [Proxy] ════════════════════════════════════
+  Componente  : Proxy
+  Log archivo : logs/Proxy_0.log
+════════════════════════════════════
+[2026-05-30 00:20:07.973] [INFO   ] [Proxy] [HEALTH] Health Check iniciado (intervalo 10s)
+[2026-05-30 00:20:07.973] [INFO   ] [Proxy] === Proxy iniciado en puerto 8080 ===
+[2026-05-30 00:20:11.872] [INFO   ] [Proxy] [PROXY] LOGIN → l1
+[2026-05-30 00:20:11.879] [FINE   ] [Proxy] [LAMPORT-PROXY] t=1 → nodo=SES-1
+[2026-05-30 00:20:12.006] [INFO   ] [Proxy] [PROXY] LISTAR_JUEGOS → l2
+[2026-05-30 00:20:12.007] [FINE   ] [Proxy] [LAMPORT-PROXY] t=5 → nodo=JUE-1
+[2026-05-30 00:20:12.095] [INFO   ] [Proxy] [PROXY] COMPRAR_JUEGO → c1
+[2026-05-30 00:20:12.097] [FINE   ] [Proxy] [LAMPORT-PROXY] t=21 → nodo=JUE-2
+[2026-05-30 00:20:54.103] [INFO   ] [Proxy] ════════════════════════════════════
+  Componente  : Proxy
+  Log archivo : logs/Proxy_0.log
+════════════════════════════════════
+[2026-05-30 00:20:54.134] [INFO   ] [Proxy] [HEALTH] Health Check iniciado (intervalo 10s)
+[2026-05-30 00:20:54.135] [INFO   ] [Proxy] === Proxy iniciado en puerto 8080 ===
+[2026-05-30 00:20:58.052] [INFO   ] [Proxy] [PROXY] LOGIN → l1
+[2026-05-30 00:20:58.059] [FINE   ] [Proxy] [LAMPORT-PROXY] t=1 → nodo=SES-1
+[2026-05-30 00:20:58.213] [INFO   ] [Proxy] [PROXY] AGREGAR_SALDO → s1
+[2026-05-30 00:20:58.214] [FINE   ] [Proxy] [LAMPORT-PROXY] t=5 → nodo=JUE-1
