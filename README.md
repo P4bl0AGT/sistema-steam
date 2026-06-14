@@ -122,30 +122,62 @@ Coordinador: entra directo a `synchronized(lock)` local.
 [MUTEX] t=P RELEASE recurso=stock por nodo-2
 ```
 
-### 4. Prueba de Carga
+### 4. Prueba de Carga y Falla Inducida
+
+**Forma rápida — un solo comando (recomendada):**
+
+```powershell
+.\scripts\13_run_prueba_trafico.ps1
+```
+
+Borra los datos, levanta los 7 procesos de forma escalonada, lanza la carga
+(50 hilos / 60 s), induce la caída del coordinador a los 30 s, mide la recuperación
+y recoge todos los logs de la corrida.
+
+**Forma manual — dos terminales:**
 
 ```
 # Terminal A
 .\scripts\10_run_generador_carga.bat    # 50 hilos, 60s
 
-# Terminal B (a los 30s)
-.\scripts\11_run_falla_inducida.bat     # mata al coordinador
+# Terminal B (a los ~30s)
+.\scripts\11_run_falla_inducida.bat     # mata al coordinador y mide la re-elección
 ```
 
-Reporte final en `logs/carga_<timestamp>.log`:
+Al terminar, el generador consulta `VER_METRICAS_COORD` a ambos nodos de juegos para
+contar los **mensajes del algoritmo de coordinación** (Bully + Mutex). La tasa de error
+refleja **pérdida real de transporte** (timeouts / sin respuesta), no los rechazos de
+negocio esperados (p. ej. "ya posees este juego").
+
+Reporte final en `logs/carga_<timestamp>.log` (corrida de referencia — 50 hilos / 60 s,
+falla del coordinador @30 s):
 
 ```
 ══════════════════════════════════════
 REPORTE FINAL DE CARGA
 ══════════════════════════════════════
 Duración          : 60s
-Total peticiones  : 2450
-Throughput        : 40.8 req/s
-Latencia promedio : 87.3 ms
-Latencia p95      : 210 ms
-Peticiones error  : 38 (1.6%)
+Total peticiones  : 24720
+Throughput        : 412 req/s
+Latencia promedio : 121 ms
+Latencia p95      : 219 ms
+Peticiones error  : 0 (0.0%)
+Msgs coordinación : 1964  (Bully=10, Mutex=1954)
 ══════════════════════════════════════
 ```
+
+> **Recuperación tras la caída del coordinador: ~7 s** (medida por `FallaInducida`),
+> con **0 % de pérdida** atravesando la falla gracias al failover del Proxy al nodo espejo.
+
+### 5. Watchdog (auto-recuperación de procesos)
+
+```
+.\scripts\12_run_watchdog.bat
+```
+
+Supervisa los 6 nodos por `HEALTH_CHECK`; si uno no responde durante 3 ciclos (15 s c/u),
+relanza su JVM con `ProcessBuilder`. El nodo reiniciado relee su estado y se re-registra
+solo en el Proxy.
 
 ---
 
@@ -178,3 +210,26 @@ svJuegos/Mensajeria ──ValidarToken──► svSesiones (directo, sin Proxy)
 Persistencia: data/*.txt  Main + Copy (escritura ATOMIC_MOVE)
 Membresía:    data/MEMBRESIA.txt (actualizada por Proxy en health-check)
 ```
+
+---
+
+## Documentación
+
+| Documento | Contenido |
+|-----------|-----------|
+| `Cobertura_Rubricas_Parcial_Final.tex` / `.pdf` | Trazabilidad punto por punto de las rúbricas **parcial y final**: qué se hizo, por qué y dónde se ve en el código. |
+
+### Mapa rúbrica final → código
+
+| Requisito | Implementación |
+|-----------|----------------|
+| §2.1 Topología multinodo + membresía | 7 procesos · `RegistradorProxy` · `RegistroMembresia` (`data/MEMBRESIA.txt`) |
+| §2.2 Ordenamiento de eventos (Lamport) | `RelojLamport` · orden causal en `svMensajeria.verConversacion()` |
+| §2.3 Coordinación (elección) | **Bully** — `GestorBully` (opción nombrada en la rúbrica) |
+| §2.4 Tolerancia a fallos | health-check (Proxy) · heartbeat (Bully) · `WatchdogServidor` · `GestorSnapshot` |
+| §3 Prueba de tráfico | `GeneradorCarga` · `FallaInducida` · `scripts/13_run_prueba_trafico.ps1` |
+
+> **Nota de defensa:** Bully no aparece en los PPTs (allí se enseña Raft), pero **está nombrado
+> explícitamente en la rúbrica §2.3** como opción válida y funciona con la topología de 2 nodos
+> (Raft requeriría un 3.er nodo para tolerar una caída). El mutex es coordinador-céntrico, con el
+> coordinador elegido por Bully.
