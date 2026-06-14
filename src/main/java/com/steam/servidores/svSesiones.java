@@ -1,6 +1,7 @@
 package com.steam.servidores;
 
 import com.steam.common.*;
+import com.steam.common.RegistradorProxy;
 import com.steam.models.*;
 
 import java.io.*;
@@ -53,10 +54,13 @@ public class svSesiones {
         if (archivoVacio(Constantes.SES_MAIN) && archivoVacio(Constantes.SES_COPY)
                 && (bd == null || bd.usuarios.isEmpty())) {
             if (bd == null) bd = new BDSesiones();
-            bd.usuarios.add(new Usuario("admin",     Utils.hashPassword("admin123"),     Constantes.ROL_ADMIN));
-            bd.usuarios.add(new Usuario("vendedor1", Utils.hashPassword("pass123"),      Constantes.ROL_VENDEDOR));
-            bd.usuarios.add(new Usuario("cliente1",  Utils.hashPassword("pass123"),      Constantes.ROL_COMPRADOR));
-            bd.usuarios.add(new Usuario("cliente2",  Utils.hashPassword("pass123"),      Constantes.ROL_COMPRADOR));
+            bd.usuarios.add(new Usuario("admin",     Utils.hashPassword("admin123"), Constantes.ROL_ADMIN));
+            bd.usuarios.add(new Usuario("vendedor1", Utils.hashPassword("pass123"),  Constantes.ROL_VENDEDOR));
+            // Compradores cliente1..clienteN (N=NUM_COMPRADORES) para la prueba de carga:
+            // cada hilo del generador usa un usuario distinto y así las sesiones no se pisan.
+            for (int i = 1; i <= Constantes.NUM_COMPRADORES; i++) {
+                bd.usuarios.add(new Usuario("cliente" + i, Utils.hashPassword("pass123"), Constantes.ROL_COMPRADOR));
+            }
             try { gp.guardar(bd); } catch (IOException e) { LOG.severe("No se pudo sembrar BD: " + e.getMessage()); }
         }
     }
@@ -70,11 +74,24 @@ public class svSesiones {
 
         svSesiones sv = new svSesiones(puerto);
 
-        // ── Snapshot periódico: Main → Copy cada 30s (solo nodo 1) ──────────
-        if (nodo == 1) {
-            new GestorSnapshot(Constantes.SES_MAIN, Constantes.SES_COPY,
-                    "svSesiones-" + nodo, 30).start();
-        }
+        // ── Snapshot periódico: Main → Copy cada 30s (ambos nodos) ─────────
+        // Nodo 1: primer snapshot a los 30s. Nodo 2: primer snapshot a los 45s.
+        // El escalonamiento evita que ambos nodos escriban al mismo .snap.tmp
+        // simultáneamente. Si Nodo 1 cae, Nodo 2 sigue actualizando la Copy.
+        GestorSnapshot snap = new GestorSnapshot(
+                Constantes.SES_MAIN, Constantes.SES_COPY, "svSesiones-" + nodo, 30);
+        snap.start(nodo == 1 ? 30 : 45);
+
+        // ── Registro dinámico en el Proxy ────────────────────────────────────
+        // RegistradorProxy intenta contactar al Proxy con reintentos en un hilo
+        // daemon, por lo que no bloquea el arranque del servidor.
+        RegistradorProxy.registrarAsync("SESIONES", puerto, "SES-" + nodo);
+
+        // ── Desregistrar del Proxy al apagarse ───────────────────────────────
+        Runtime.getRuntime().addShutdownHook(new Thread(
+            () -> RegistradorProxy.desregistrar("SESIONES", puerto),
+            "shutdown-sesiones-" + nodo
+        ));
 
         sv.escuchar();
     }
@@ -247,8 +264,9 @@ public class svSesiones {
             }
 
             Sesion s = sesion.get();
-            s.ultimaActividad = System.currentTimeMillis();
-            try { gp.guardar(bd); } catch (IOException ignored) {}
+            // No persistimos ultimaActividad: evitar una escritura por cada validación
+            // reduce drásticamente la contención sobre el archivo compartido bajo carga.
+            // (La validación es una operación de lectura; no debe reescribir la BD.)
 
             MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "Token válido");
             resp.put("username", s.username);

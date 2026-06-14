@@ -31,17 +31,23 @@ import java.util.logging.*;
 public class GeneradorCarga {
 
     // ── Métricas ──────────────────────────────────────────────────────────────
-    private static final AtomicLong totalPeticiones    = new AtomicLong(0);
-    private static final AtomicLong peticionesExitosas = new AtomicLong(0);
-    private static final AtomicLong peticionesError    = new AtomicLong(0);
-    private static final AtomicLong sumaLatenciasMs    = new AtomicLong(0);
+    // Distinguimos tres resultados por petición de red:
+    //   - respuestasOk      : el servidor respondió OK (transacción aceptada)
+    //   - respuestasRechazo : el servidor respondió ERROR de NEGOCIO (p.ej. "ya posees
+    //                         el juego"). El sistema está vivo: NO es una pérdida.
+    //   - perdidas          : timeout / sin respuesta / conexión rechazada. ESTA es la
+    //                         "tasa de pérdida" que se dispara al caer un nodo (rúbrica 3.2).
+    private static final AtomicLong totalPeticiones   = new AtomicLong(0);
+    private static final AtomicLong respuestasOk      = new AtomicLong(0);
+    private static final AtomicLong respuestasRechazo = new AtomicLong(0);
+    private static final AtomicLong perdidas          = new AtomicLong(0);
+    private static final AtomicLong sumaLatenciasMs   = new AtomicLong(0); // solo de respuestas servidas
     private static final CopyOnWriteArrayList<Long> todasLatencias = new CopyOnWriteArrayList<>();
 
     private static final RelojLamport reloj = new RelojLamport();
     private static final Logger       LOG   = Logger.getLogger(GeneradorCarga.class.getName());
 
-    private static final String[] USUARIOS = { "cliente1", "cliente2" };
-    private static final String   PASS     = "pass123";
+    private static final String   PASS = "pass123";
 
     // ── main ─────────────────────────────────────────────────────────────────
 
@@ -62,7 +68,8 @@ public class GeneradorCarga {
 
         ExecutorService pool = Executors.newFixedThreadPool(hilos);
         for (int i = 0; i < hilos; i++) {
-            pool.submit(() -> cicloWorker(finMs));
+            final int idx = i;   // identidad fija del hilo → usuario propio
+            pool.submit(() -> cicloWorker(finMs, idx));
         }
 
         // Hilo de reporte parcial cada 10 s
@@ -76,9 +83,10 @@ public class GeneradorCarga {
                 long inter  = (now - lastTime)  / 1_000;
                 long total  = totalPeticiones.get();
                 long tp     = inter > 0 ? (total - lastTotal) / inter : 0;
-                double avg  = total > 0 ? (double) sumaLatenciasMs.get() / total : 0;
-                String msg  = String.format("[CARGA] t=%ds | throughput=%d req/s | latAvg=%.1fms | errores=%d",
-                        elap, tp, avg, peticionesError.get());
+                long serv   = respuestasOk.get() + respuestasRechazo.get();
+                double avg  = serv > 0 ? (double) sumaLatenciasMs.get() / serv : 0;
+                String msg  = String.format("[CARGA] t=%ds | throughput=%d req/s | latAvg=%.1fms | perdidas=%d",
+                        elap, tp, avg, perdidas.get());
                 System.out.println(msg);
                 LOG.info(msg);
                 lastTime  = now;
@@ -97,13 +105,15 @@ public class GeneradorCarga {
 
     // ── Worker ────────────────────────────────────────────────────────────────
 
-    private static void cicloWorker(long finMs) {
+    private static void cicloWorker(long finMs, int idx) {
         Random rand = new Random();
+        // Usuario propio del hilo (cliente1..clienteN). Receptor de mensajes = el siguiente.
+        int    n    = Constantes.NUM_COMPRADORES;
+        String user = "cliente" + ((idx % n) + 1);
+        String otro = "cliente" + (((idx + 1) % n) + 1);
         while (System.currentTimeMillis() < finMs
                 && !Thread.currentThread().isInterrupted()) {
             try {
-                String user = USUARIOS[rand.nextInt(USUARIOS.length)];
-
                 // a) LOGIN
                 String token = op(() -> {
                     MensajeProtocolo req = MensajeProtocolo.request(Constantes.LOGIN, null);
@@ -112,7 +122,7 @@ public class GeneradorCarga {
                     MensajeProtocolo resp = enviar(req);
                     return (resp != null && resp.isOk()) ? resp.getString("token") : null;
                 });
-                if (token == null) { peticionesError.incrementAndGet(); continue; }
+                if (token == null) continue; // login falló (ya contabilizado en enviar)
 
                 // b) LISTAR_JUEGOS
                 @SuppressWarnings("unchecked")
@@ -122,10 +132,10 @@ public class GeneradorCarga {
                     return (List<Map<String, Object>>) resp.get("juegos");
                 });
 
-                // c) COMPRAR primer juego disponible
+                // c) COMPRAR un juego al azar (reparte la contención sobre el catálogo)
                 String reservaId = null;
                 if (juegos != null && !juegos.isEmpty()) {
-                    String juegoId = juegos.get(0).get("id").toString();
+                    String juegoId = juegos.get(rand.nextInt(juegos.size())).get("id").toString();
                     reservaId = op(() -> {
                         MensajeProtocolo req = MensajeProtocolo.request(Constantes.COMPRAR_JUEGO, token);
                         req.put("juegoId", juegoId);
@@ -146,7 +156,6 @@ public class GeneradorCarga {
                 }
 
                 // e) ENVIAR_MENSAJE al otro usuario
-                String otro = USUARIOS[(Arrays.asList(USUARIOS).indexOf(user) + 1) % USUARIOS.length];
                 op(() -> {
                     MensajeProtocolo req = MensajeProtocolo.request(Constantes.ENVIAR_MENSAJE, token);
                     req.put("receptor",  otro);
@@ -162,38 +171,29 @@ public class GeneradorCarga {
                 });
 
             } catch (Exception e) {
-                peticionesError.incrementAndGet();
+                // Excepción inesperada del worker (no es una petición de red en sí).
             }
         }
     }
 
-    // ── Helper de operación con métricas ──────────────────────────────────────
+    // ── Helper de control de flujo ────────────────────────────────────────────
+    // Las métricas se capturan dentro de enviar() (una por round-trip de red).
+    // op() solo ejecuta el paso y absorbe excepciones para no cortar el ciclo.
 
     @FunctionalInterface
     interface Operacion<T> { T ejecutar() throws Exception; }
 
     private static <T> T op(Operacion<T> o) {
-        long t0 = System.currentTimeMillis();
-        try {
-            T result = o.ejecutar();
-            long lat = System.currentTimeMillis() - t0;
-            totalPeticiones.incrementAndGet();
-            sumaLatenciasMs.addAndGet(lat);
-            todasLatencias.add(lat);
-            if (result != null) peticionesExitosas.incrementAndGet();
-            else                peticionesError.incrementAndGet();
-            return result;
-        } catch (Exception e) {
-            peticionesError.incrementAndGet();
-            totalPeticiones.incrementAndGet();
-            return null;
-        }
+        try { return o.ejecutar(); }
+        catch (Exception e) { return null; }
     }
 
     // ── Transporte ────────────────────────────────────────────────────────────
 
     private static MensajeProtocolo enviar(MensajeProtocolo req) {
         req.setLamportClock(reloj.tick());
+        long t0 = System.currentTimeMillis();
+        totalPeticiones.incrementAndGet();
         try (Socket socket = new Socket(Constantes.HOST, Constantes.PUERTO_PROXY)) {
             socket.setSoTimeout(Constantes.TIMEOUT_MS);
             PrintWriter   out = new PrintWriter(
@@ -203,11 +203,24 @@ public class GeneradorCarga {
             out.println(req.toJson());
             String resp = in.readLine();
             if (resp != null) {
+                // Hubo respuesta → petición servida; registramos su latencia.
+                long lat = System.currentTimeMillis() - t0;
+                sumaLatenciasMs.addAndGet(lat);
+                todasLatencias.add(lat);
                 MensajeProtocolo m = MensajeProtocolo.fromJson(resp);
-                if (m != null) reloj.update(m.getLamportClock());
-                return m;
+                if (m != null) {
+                    reloj.update(m.getLamportClock());
+                    if (m.isOk()) respuestasOk.incrementAndGet();
+                    else          respuestasRechazo.incrementAndGet(); // ERROR de negocio, sistema vivo
+                    return m;
+                }
             }
-        } catch (IOException ignored) {}
+            // resp == null o JSON corrupto → no llegó respuesta útil = pérdida
+            perdidas.incrementAndGet();
+        } catch (IOException e) {
+            // Timeout / conexión rechazada (típico al caer un nodo) = pérdida real
+            perdidas.incrementAndGet();
+        }
         return null;
     }
 
@@ -215,33 +228,80 @@ public class GeneradorCarga {
 
     private static void imprimirReporteFinal(int duracionSeg, String logFile) {
         long total    = totalPeticiones.get();
-        long exitosas = peticionesExitosas.get();
-        long errores  = peticionesError.get();
-        double tp     = total > 0 ? (double) total / duracionSeg : 0;
-        double avg    = total > 0 ? (double) sumaLatenciasMs.get() / total : 0;
-        double pct    = total > 0 ? errores * 100.0 / total : 0;
+        long ok       = respuestasOk.get();
+        long rechazo  = respuestasRechazo.get();
+        long perdida  = perdidas.get();
+        long servidas = ok + rechazo;
+        double tp     = total > 0    ? (double) total / duracionSeg : 0;
+        double avg    = servidas > 0 ? (double) sumaLatenciasMs.get() / servidas : 0;
+        double pctPer = total > 0    ? perdida * 100.0 / total : 0;
 
-        // Calcular p95
+        // Calcular p95 (sobre peticiones servidas)
         List<Long> sorted = new ArrayList<>(todasLatencias);
         Collections.sort(sorted);
         long p95 = sorted.isEmpty() ? 0 : sorted.get((int) (sorted.size() * 0.95));
+
+        // Mensajes de coordinación: consultar a cada nodo de svJuegos y sumar
+        long[] coord     = recolectarCoord();
+        long   msgBully  = coord[0];
+        long   msgMutex  = coord[1];
+        long   msgCoord  = msgBully + msgMutex;
 
         String reporte = String.format("""
                 ══════════════════════════════════════
                 REPORTE FINAL DE CARGA
                 ══════════════════════════════════════
-                Duración          : %ds
-                Total peticiones  : %d
-                Throughput        : %.1f req/s
-                Latencia promedio : %.1f ms
-                Latencia p95      : %d ms
-                Peticiones error  : %d (%.1f%%)
-                Log guardado en   : %s
+                Duración           : %ds
+                Total peticiones   : %d
+                Throughput         : %.1f req/s
+                Latencia promedio  : %.1f ms
+                Latencia p95       : %d ms
+                Respuestas OK      : %d
+                Rechazos de negocio: %d  (sistema vivo, no es pérdida)
+                Pérdidas (timeout) : %d  (%.1f%% — tasa de pérdida)
+                Msgs coordinación  : %d  (Bully=%d, Mutex=%d)
+                Log guardado en    : %s
                 ══════════════════════════════════════""",
-                duracionSeg, total, tp, avg, p95, errores, pct, logFile);
+                duracionSeg, total, tp, avg, p95, ok, rechazo,
+                perdida, pctPer, msgCoord, msgBully, msgMutex, logFile);
 
         System.out.println(reporte);
         LOG.info(reporte);
+    }
+
+    /**
+     * Consulta VER_METRICAS_COORD a ambos nodos de svJuegos (directo, sin proxy)
+     * y suma los mensajes de coordinación emitidos. Retorna {totalBully, totalMutex}.
+     * Si un nodo está caído (p.ej. tras la falla inducida), se omite.
+     */
+    private static long[] recolectarCoord() {
+        long bully = 0, mutex = 0;
+        int[] puertos = { Constantes.PUERTO_JUE_1, Constantes.PUERTO_JUE_2 };
+        for (int puerto : puertos) {
+            MensajeProtocolo resp = enviarA(
+                    MensajeProtocolo.request(Constantes.VER_METRICAS_COORD, null), puerto);
+            if (resp != null && resp.isOk()) {
+                bully += (long) resp.getDouble("mensajesBully");
+                mutex += (long) resp.getDouble("mensajesMutex");
+            }
+        }
+        return new long[]{ bully, mutex };
+    }
+
+    /** Envía una petición a un puerto específico (sin pasar por el proxy). */
+    private static MensajeProtocolo enviarA(MensajeProtocolo req, int puerto) {
+        try (Socket socket = new Socket(Constantes.HOST, puerto)) {
+            socket.setSoTimeout(Constantes.TIMEOUT_MS);
+            PrintWriter   out = new PrintWriter(
+                    new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
+            BufferedReader in = new BufferedReader(
+                    new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+            out.println(req.toJson());
+            String resp = in.readLine();
+            return resp != null ? MensajeProtocolo.fromJson(resp) : null;
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     // ── Configuración de logging ──────────────────────────────────────────────

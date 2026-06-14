@@ -1,6 +1,7 @@
 package com.steam.servidores;
 
 import com.steam.common.*;
+import com.steam.common.RegistradorProxy;
 import com.steam.coordinacion.*;
 import com.steam.models.*;
 
@@ -71,14 +72,22 @@ public class svJuegos {
         if (archivoVacio(Constantes.GME_MAIN) && archivoVacio(Constantes.GME_COPY)
                 && (bd == null || bd.catalogo.isEmpty())) {
             if (bd == null) bd = new BDJuegos();
+            // Stock alto y varios juegos para que la prueba de carga sostenga compras
+            // reales (y por tanto ejercite el mutex del stock) durante toda la corrida.
             bd.catalogo.add(new Juego(uuid(), "Counter-Strike 2",
-                    "FPS táctico multijugador", 29.99, 50, "vendedor1"));
+                    "FPS táctico multijugador", 29.99, 200, "vendedor1"));
             bd.catalogo.add(new Juego(uuid(), "Cyberpunk 2077",
-                    "RPG de mundo abierto futurista", 59.99, 20, "vendedor1"));
+                    "RPG de mundo abierto futurista", 59.99, 200, "vendedor1"));
             bd.catalogo.add(new Juego(uuid(), "Stardew Valley",
-                    "Simulador de granja relajante", 14.99, 100, "vendedor1"));
-            bd.billeteras.put("cliente1",  500.0);
-            bd.billeteras.put("cliente2",  200.0);
+                    "Simulador de granja relajante", 14.99, 200, "vendedor1"));
+            bd.catalogo.add(new Juego(uuid(), "Hades",
+                    "Roguelike de acción", 24.99, 200, "vendedor1"));
+            bd.catalogo.add(new Juego(uuid(), "Elden Ring",
+                    "RPG de acción de mundo abierto", 49.99, 200, "vendedor1"));
+            // Saldo para cada comprador cliente1..clienteN
+            for (int i = 1; i <= Constantes.NUM_COMPRADORES; i++) {
+                bd.billeteras.put("cliente" + i, 1_000.0);
+            }
             bd.billeteras.put("vendedor1", 0.0);
             bd.billeteras.put("admin",     0.0);
             try { gp.guardar(bd); } catch (IOException e) { LOG.severe("No se pudo sembrar BD: " + e.getMessage()); }
@@ -107,15 +116,23 @@ public class svJuegos {
         sv.bully = new GestorBully(nodo, puertoBully, peers, relojLamport);
         sv.mutex = new GestorMutexCentralizado(nodo, puertoMutex, sv.bully, relojLamport, peers);
 
-        // ── Snapshot periódico: Main → Copy cada 30s (solo nodo 1) ──────────
-        if (nodo == 1) {
-            new GestorSnapshot(Constantes.GME_MAIN, Constantes.GME_COPY,
-                    "svJuegos-" + nodo, 30).start();
-        }
+        // ── Snapshot periódico: Main → Copy cada 30s (ambos nodos) ─────────
+        GestorSnapshot snap = new GestorSnapshot(
+                Constantes.GME_MAIN, Constantes.GME_COPY, "svJuegos-" + nodo, 30);
+        snap.start(nodo == 1 ? 30 : 45);
 
         sv.mutex.startServidor();
         sv.bully.start();          // lanza elección automáticamente
         sv.iniciarGestorLocks();
+
+        // ── Registro dinámico en el Proxy ────────────────────────────────────
+        RegistradorProxy.registrarAsync("JUEGOS", puerto, "JUE-" + nodo);
+
+        Runtime.getRuntime().addShutdownHook(new Thread(
+            () -> RegistradorProxy.desregistrar("JUEGOS", puerto),
+            "shutdown-juegos-" + nodo
+        ));
+
         sv.escuchar();
     }
 
@@ -182,6 +199,7 @@ public class svJuegos {
         return switch (req.getOperacion()) {
             case Constantes.HEALTH_CHECK          -> healthCheck(req);
             case Constantes.QUIEN_ES_COORDINADOR  -> quienEsCoordinador(req);
+            case Constantes.VER_METRICAS_COORD    -> verMetricasCoord(req);
             case Constantes.SHUTDOWN_GRACEFUL     -> shutdownGraceful(req);
             case Constantes.LISTAR_JUEGOS     -> listarJuegos(req);
             case Constantes.VER_JUEGO         -> verJuego(req);
@@ -224,6 +242,23 @@ public class svJuegos {
         resp.put("coordinadorActual", coord);
         resp.put("soyCoordinador",    bully != null && bully.isCoordinador());
         resp.put("miId",              miId);
+        return resp;
+    }
+
+    /**
+     * VER_METRICAS_COORD: devuelve cuántos mensajes de coordinación emitió este
+     * nodo (Bully + Mutex). El GeneradorCarga consulta ambos nodos al terminar
+     * y suma los totales para el reporte de carga (rúbrica 3.2).
+     */
+    private MensajeProtocolo verMetricasCoord(MensajeProtocolo req) {
+        long bullyMsg = (bully != null) ? bully.getMensajesCoordinacion() : 0;
+        long mutexMsg = (mutex != null) ? mutex.getMensajesCoordinacion() : 0;
+        MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(),
+                "Métricas de coordinación nodo-" + miId);
+        resp.put("miId",                 miId);
+        resp.put("mensajesBully",        bullyMsg);
+        resp.put("mensajesMutex",        mutexMsg);
+        resp.put("mensajesCoordinacion", bullyMsg + mutexMsg);
         return resp;
     }
 

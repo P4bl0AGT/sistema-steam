@@ -38,9 +38,20 @@ public class GestorSnapshot {
 
     /**
      * Inicia el daemon de snapshot.
-     * El primer snapshot ocurre después del primer intervalo.
+     * El primer snapshot ocurre después de {@code intervaloSeg} segundos.
      */
     public void start() {
+        start(intervaloSeg);
+    }
+
+    /**
+     * Inicia el daemon con un retardo inicial personalizado.
+     * Útil para escalonar dos nodos que comparten los mismos archivos Main/Copy,
+     * evitando que ambos escriban al mismo archivo temporal simultáneamente.
+     *
+     * Ejemplo: Nodo 1 → start(30), Nodo 2 → start(45); nunca coinciden.
+     */
+    public void start(int initialDelaySeg) {
         scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "snapshot-" + componente);
             t.setDaemon(true);
@@ -49,13 +60,13 @@ public class GestorSnapshot {
 
         scheduler.scheduleAtFixedRate(
                 this::tomarSnapshot,
-                intervaloSeg,
+                initialDelaySeg,
                 intervaloSeg,
                 TimeUnit.SECONDS
         );
 
         LOG.info("[SNAPSHOT] " + componente
-                + " daemon iniciado (intervalo=" + intervaloSeg + "s)"
+                + " daemon iniciado (delay=" + initialDelaySeg + "s, intervalo=" + intervaloSeg + "s)"
                 + " | " + pathMain + " → " + pathCopy);
     }
 

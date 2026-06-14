@@ -51,6 +51,15 @@ public final class Constantes {
     public static final String HEALTH_CHECK            = "HEALTH_CHECK";
     public static final String QUIEN_ES_COORDINADOR    = "QUIEN_ES_COORDINADOR";
     public static final String SHUTDOWN_GRACEFUL       = "SHUTDOWN_GRACEFUL";
+    public static final String VER_METRICAS_COORD      = "VER_METRICAS_COORD";
+
+    // ── Registro dinámico en Proxy ────────────────────────────────────────────
+    public static final String REGISTRAR_NODO          = "REGISTRAR_NODO";
+    public static final String DESREGISTRAR_NODO       = "DESREGISTRAR_NODO";
+
+    // ── Watchdog ──────────────────────────────────────────────────────────────
+    public static final int WATCHDOG_INTERVALO_SEG     = 15;
+    public static final int WATCHDOG_MAX_FALLOS        = 3;
 
     // ── Coordinación Bully / Mutex ────────────────────────────────────────────
     public static final int    PUERTO_JUE_1_BULLY      = 9082;
@@ -84,6 +93,11 @@ public final class Constantes {
     // ── Concurrencia ──────────────────────────────────────────────────────────
     public static final int POOL_SIZE       = 30;
     public static final int MAX_CONNECTIONS = 100;
+
+    // ── Prueba de carga ───────────────────────────────────────────────────────
+    // Nº de compradores sembrados (cliente1..clienteN). El generador de carga
+    // asigna un usuario distinto por hilo para que las sesiones no se pisen.
+    public static final int NUM_COMPRADORES = 50;
 
     // ── Archivos de datos ─────────────────────────────────────────────────────
     public static final String DATA_DIR  = "data";

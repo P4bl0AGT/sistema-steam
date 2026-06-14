@@ -36,6 +36,39 @@ public class FallaInducida {
         enviarShutdown(coordPuerto);
         System.out.println("[FALLA] Señal enviada. El otro nodo debería iniciar re-elección en ~"
                 + (Constantes.HEARTBEAT_COORD_MS / 1_000) + "s.");
+
+        medirRecuperacion(coordPuerto);
+    }
+
+    /**
+     * Mide el TIEMPO DE RECUPERACIÓN (rúbrica 3.3): desde que se derriba al
+     * coordinador hasta que el nodo sobreviviente se proclama nuevo coordinador.
+     * Sondea QUIEN_ES_COORDINADOR cada 200 ms (máximo 30 s).
+     */
+    private static void medirRecuperacion(int coordPuertoCaido) {
+        int survivor = (coordPuertoCaido == Constantes.PUERTO_JUE_1)
+                ? Constantes.PUERTO_JUE_2 : Constantes.PUERTO_JUE_1;
+
+        long t0       = System.currentTimeMillis();
+        long deadline = t0 + 30_000;
+        System.out.println("[FALLA] Midiendo recuperación: sondeando nodo sobreviviente (puerto "
+                + survivor + ")...");
+
+        while (System.currentTimeMillis() < deadline) {
+            MensajeProtocolo r = enviar(
+                    MensajeProtocolo.request(Constantes.QUIEN_ES_COORDINADOR, null), survivor);
+            if (r != null && r.isOk() && Boolean.TRUE.equals(r.get("soyCoordinador"))) {
+                long ms = System.currentTimeMillis() - t0;
+                System.out.println("[FALLA] >>> RECUPERACIÓN COMPLETA en " + ms + " ms"
+                        + " | nuevo coordinador: nodo en puerto " + survivor);
+                return;
+            }
+            try { Thread.sleep(200); } catch (InterruptedException e) {
+                Thread.currentThread().interrupt(); return;
+            }
+        }
+        System.out.println("[FALLA] No se detectó reelección dentro de 30 s "
+                + "(¿el nodo sobreviviente también cayó?).");
     }
 
     /** Consulta QUIEN_ES_COORDINADOR a ambos nodos y retorna el puerto del coordinador. */

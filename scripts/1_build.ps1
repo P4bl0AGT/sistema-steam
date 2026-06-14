@@ -33,8 +33,9 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
 # 5. Escribir lista de fuentes en un argfile (@-file) que javac entiende.
 #    Usamos barras / en vez de \ porque javac trata \ como escape dentro del argfile.
+#    WriteAllLines escribe UTF-8 SIN BOM (Set-Content -Encoding UTF8 escribe CON BOM en PS5).
 $argFile = "$root\sources.txt"
-$sources | ForEach-Object { $_ -replace '\\', '/' } | Set-Content $argFile -Encoding UTF8
+[System.IO.File]::WriteAllLines($argFile, ($sources | ForEach-Object { $_ -replace '\\', '/' }))
 
 # 6. Compilar usando el argfile
 javac --release 17 -cp $gsonJar -d $outDir "@$argFile" 2>&1 | Write-Host

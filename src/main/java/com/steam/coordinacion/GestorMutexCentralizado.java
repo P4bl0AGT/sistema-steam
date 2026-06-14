@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
 
 /**
@@ -45,6 +46,13 @@ public class GestorMutexCentralizado {
     private final Map<String, Semaphore> semaforos = new ConcurrentHashMap<>();
 
     private final AtomicBoolean stopped = new AtomicBoolean(false);
+
+    /**
+     * Métrica de coordinación (rúbrica 3.2): cuenta los mensajes de mutex que
+     * este nodo EMITE (REQUEST, RELEASE como cliente; GRANT/TIMEOUT como coordinador).
+     */
+    private final AtomicLong mensajesEnviados = new AtomicLong(0);
+
     private final ExecutorService pool  = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r, "mutex-worker");
         t.setDaemon(true);
@@ -93,6 +101,9 @@ public class GestorMutexCentralizado {
         pool.shutdownNow();
     }
 
+    /** Total de mensajes de mutex emitidos por este nodo (métrica de coordinación). */
+    public long getMensajesCoordinacion() { return mensajesEnviados.get(); }
+
     // ── Manejo de peticiones (ejecutado solo en el coordinador en la práctica) ─
 
     private void manejarPeticion(Socket socket) {
@@ -129,12 +140,14 @@ public class GestorMutexCentralizado {
                         out.println(new MensajeMutex(
                                 MensajeMutex.GRANT, miId, msg.recurso, msg.requestId, t)
                                 .toJson());
+                        mensajesEnviados.incrementAndGet();
                     } else {
                         // Timeout: el coordinador no pudo otorgar
                         LOG.warning("[MUTEX] Timeout otorgando recurso=" + msg.recurso);
                         out.println(new MensajeMutex(
                                 "TIMEOUT", miId, msg.recurso, msg.requestId, reloj.tick())
                                 .toJson());
+                        mensajesEnviados.incrementAndGet();
                     }
                 }
                 case MensajeMutex.RELEASE -> {
@@ -178,6 +191,7 @@ public class GestorMutexCentralizado {
 
             out.println(new MensajeMutex(
                     MensajeMutex.REQUEST, solicitanteId, recurso, reqId, t).toJson());
+            mensajesEnviados.incrementAndGet();
 
             String respLine = in.readLine();
             if (respLine == null)
@@ -211,6 +225,7 @@ public class GestorMutexCentralizado {
             out.println(new MensajeMutex(
                     MensajeMutex.RELEASE, solicitanteId, recurso,
                     UUID.randomUUID().toString(), t).toJson());
+            mensajesEnviados.incrementAndGet();
         } catch (IOException e) {
             LOG.warning("[MUTEX] Error enviando RELEASE: " + e.getMessage());
         }

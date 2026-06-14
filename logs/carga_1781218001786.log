@@ -1,0 +1,27 @@
+jun 11, 2026 6:46:51 P. M. com.steam.carga.GeneradorCarga lambda$main$1
+INFORMACIÓN: [CARGA] t=10s | throughput=686 req/s | latAvg=72,1ms | perdidas=0
+jun 11, 2026 6:47:01 P. M. com.steam.carga.GeneradorCarga lambda$main$1
+INFORMACIÓN: [CARGA] t=20s | throughput=345 req/s | latAvg=96,8ms | perdidas=0
+jun 11, 2026 6:47:11 P. M. com.steam.carga.GeneradorCarga lambda$main$1
+INFORMACIÓN: [CARGA] t=30s | throughput=351 req/s | latAvg=108,3ms | perdidas=0
+jun 11, 2026 6:47:21 P. M. com.steam.carga.GeneradorCarga lambda$main$1
+INFORMACIÓN: [CARGA] t=40s | throughput=336 req/s | latAvg=116,2ms | perdidas=0
+jun 11, 2026 6:47:31 P. M. com.steam.carga.GeneradorCarga lambda$main$1
+INFORMACIÓN: [CARGA] t=50s | throughput=346 req/s | latAvg=120,9ms | perdidas=0
+jun 11, 2026 6:47:41 P. M. com.steam.carga.GeneradorCarga lambda$main$1
+INFORMACIÓN: [CARGA] t=60s | throughput=331 req/s | latAvg=124,8ms | perdidas=0
+jun 11, 2026 6:47:42 P. M. com.steam.carga.GeneradorCarga imprimirReporteFinal
+INFORMACIÓN: ══════════════════════════════════════
+REPORTE FINAL DE CARGA
+══════════════════════════════════════
+Duración           : 60s
+Total peticiones   : 23966
+Throughput         : 399,4 req/s
+Latencia promedio  : 124,9 ms
+Latencia p95       : 230 ms
+Respuestas OK      : 30
+Rechazos de negocio: 23936  (sistema vivo, no es pérdida)
+Pérdidas (timeout) : 0  (0,0% — tasa de pérdida)
+Msgs coordinación  : 10  (Bully=10, Mutex=0)
+Log guardado en    : logs/carga_1781218001786.log
+══════════════════════════════════════

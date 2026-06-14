@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
 
 /**
@@ -41,6 +42,13 @@ public class GestorBully {
 
     private final AtomicBoolean eleccionEnCurso = new AtomicBoolean(false);
     private final AtomicBoolean stopped         = new AtomicBoolean(false);
+
+    /**
+     * Métrica de coordinación (rúbrica 3.2): cuenta los mensajes Bully que
+     * este nodo EMITE (ELECTION, OK, COORDINATOR, HEARTBEAT). Se cuentan los
+     * enviados —no los recibidos— para que la suma entre nodos no duplique.
+     */
+    private final AtomicLong mensajesEnviados = new AtomicLong(0);
 
     // Latches reutilizados por iniciarEleccion(); volatile para visibilidad cross-thread
     private volatile CountDownLatch okLatch;
@@ -82,6 +90,9 @@ public class GestorBully {
 
     public boolean isCoordinador()       { return coordinadorActual == miId; }
     public int     getCoordinadorActual(){ return coordinadorActual; }
+
+    /** Total de mensajes Bully emitidos por este nodo (métrica de coordinación). */
+    public long    getMensajesCoordinacion(){ return mensajesEnviados.get(); }
 
     // ── Servidor Bully (hilo daemon) ─────────────────────────────────────────
 
@@ -130,6 +141,7 @@ public class GestorBully {
                         MensajeBully ok = new MensajeBully(
                                 MensajeBully.OK, miId, -1, reloj.tick());
                         out.println(ok.toJson());
+                        mensajesEnviados.incrementAndGet();
                         LOG.info("[BULLY] t=" + ok.lamportClock
                                 + " OK enviado a nodo-" + msg.emisorId);
                         // Si yo no tengo elección en curso, inicio la mía
@@ -150,6 +162,7 @@ public class GestorBully {
                     MensajeBully resp = new MensajeBully(
                             MensajeBully.OK, miId, coordinadorActual, reloj.tick());
                     out.println(resp.toJson());
+                    mensajesEnviados.incrementAndGet();
                 }
                 // OK llega como RESPUESTA en el canal de enviarEleccion(), no aquí
             }
@@ -251,6 +264,7 @@ public class GestorBully {
             MensajeBully msg = new MensajeBully(MensajeBully.ELECTION, miId, -1, t);
             LOG.info("[BULLY] t=" + t + " ELECTION enviado a nodo-" + peer.id);
             out.println(msg.toJson());
+            mensajesEnviados.incrementAndGet();
 
             String respLine = in.readLine();
             if (respLine == null) return false;
@@ -286,6 +300,7 @@ public class GestorBully {
             PrintWriter out = new PrintWriter(
                     new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
             out.println(msg.toJson());
+            mensajesEnviados.incrementAndGet();
         } catch (IOException e) {
             LOG.fine("[BULLY] No se pudo enviar " + msg.tipo + " a puerto " + puerto);
         }
@@ -333,6 +348,7 @@ public class GestorBully {
             MensajeBully hb = new MensajeBully(
                     MensajeBully.HEARTBEAT_COORD, miId, coord.id, reloj.tick());
             out.println(hb.toJson());
+            mensajesEnviados.incrementAndGet();
 
             String resp = in.readLine();
             if (resp != null) {

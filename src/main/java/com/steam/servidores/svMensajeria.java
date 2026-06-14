@@ -1,6 +1,7 @@
 package com.steam.servidores;
 
 import com.steam.common.*;
+import com.steam.common.RegistradorProxy;
 import com.steam.models.*;
 
 import java.io.*;
@@ -60,11 +61,18 @@ public class svMensajeria {
 
         svMensajeria sv = new svMensajeria(puerto);
 
-        // ── Snapshot periódico: Main → Copy cada 30s (solo nodo 1) ──────────
-        if (nodo == 1) {
-            new GestorSnapshot(Constantes.MSG_MAIN, Constantes.MSG_COPY,
-                    "svMensajeria-" + nodo, 30).start();
-        }
+        // ── Snapshot periódico: Main → Copy cada 30s (ambos nodos) ─────────
+        GestorSnapshot snap = new GestorSnapshot(
+                Constantes.MSG_MAIN, Constantes.MSG_COPY, "svMensajeria-" + nodo, 30);
+        snap.start(nodo == 1 ? 30 : 45);
+
+        // ── Registro dinámico en el Proxy ────────────────────────────────────
+        RegistradorProxy.registrarAsync("MENSAJERIA", puerto, "MSG-" + nodo);
+
+        Runtime.getRuntime().addShutdownHook(new Thread(
+            () -> RegistradorProxy.desregistrar("MENSAJERIA", puerto),
+            "shutdown-mensajeria-" + nodo
+        ));
 
         sv.escuchar();
     }
