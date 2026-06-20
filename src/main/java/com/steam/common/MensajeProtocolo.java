@@ -1,9 +1,6 @@
 package com.steam.common;
 
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-
-import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -34,6 +31,10 @@ public class MensajeProtocolo {
     private String              mensaje;       // descripción legible del resultado
     private long                timestamp;
     private long                lamportClock;  // reloj de Lamport del emisor
+    private int                 versionProtocolo = 1;
+    private String              codigoError;   // BUSINESS | UNAVAILABLE | SECURITY | ...
+    private String              emisor;
+    private String              receptor;
 
     // ── Constructores de fábrica ──────────────────────────────────────────────
 
@@ -124,6 +125,11 @@ public class MensajeProtocolo {
         return Constantes.OK.equals(status);
     }
 
+    public MensajeProtocolo setCodigoErrorFluent(String value) {
+        this.codigoError = value;
+        return this;
+    }
+
     // ── Getters / Setters ─────────────────────────────────────────────────────
 
     public String getRequestId()                   { return requestId; }
@@ -155,6 +161,18 @@ public class MensajeProtocolo {
 
     public long  getLamportClock()                 { return lamportClock; }
     public void  setLamportClock(long v)           { this.lamportClock = v; }
+
+    public int getVersionProtocolo()                { return versionProtocolo; }
+    public void setVersionProtocolo(int v)          { this.versionProtocolo = v; }
+
+    public String getCodigoError()                  { return codigoError; }
+    public void setCodigoError(String v)            { this.codigoError = v; }
+
+    public String getEmisor()                       { return emisor; }
+    public void setEmisor(String v)                 { this.emisor = v; }
+
+    public String getReceptor()                     { return receptor; }
+    public void setReceptor(String v)               { this.receptor = v; }
 
     @Override
     public String toString() {

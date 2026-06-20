@@ -1,94 +1,73 @@
 package com.steam.common;
 
-import java.io.*;
-import java.net.Socket;
-import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
-/**
- * RegistradorProxy — utilidad para que los servidores se registren
- * dinámicamente en el Proxy al arrancar.
- *
- * El registro se intenta en un hilo daemon con reintentos cada 3s,
- * ya que el Proxy puede no estar corriendo cuando el servidor arranca.
- * Si tras N intentos el Proxy no responde, el health-check del Proxy
- * sincronizará el estado cuando éste levante.
- *
- * Al cerrar, los servidores invocan desregistrar() para que el Proxy
- * marque el nodo como inactivo sin esperar al próximo health-check.
- */
+/** Registro y renovacion periodica en todas las instancias de Proxy. */
 public final class RegistradorProxy {
-
-    private static final Logger LOG      = Logger.getLogger(RegistradorProxy.class.getName());
-    private static final int    REINTENTOS = 10;
-    private static final int    ESPERA_MS  = 3_000;
+    private static final Logger LOG = Logger.getLogger(RegistradorProxy.class.getName());
+    private static final RelojLamport RELOJ = new RelojLamport("RegistradorProxy");
+    private static final ScheduledExecutorService SCHED =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "registrador-proxies");
+                t.setDaemon(true);
+                return t;
+            });
 
     private RegistradorProxy() {}
 
-    /**
-     * Lanza un hilo daemon que intenta registrar el nodo en el Proxy.
-     * No bloquea el arranque del servidor.
-     */
+    public static void registrarAsync(String cluster, int nodoId, int puerto, String nombre,
+                                      int puertoBully, int puertoMutex, int puertoReplicacion) {
+        Runnable tarea = () -> registrarEnTodos(cluster, nodoId, puerto, nombre,
+                puertoBully, puertoMutex, puertoReplicacion);
+        SCHED.scheduleAtFixedRate(tarea, 0, 15, TimeUnit.SECONDS);
+    }
+
+    /** Compatibilidad con servidores sin canales adicionales. */
     public static void registrarAsync(String cluster, int puerto, String nombre) {
-        Thread t = new Thread(
-            () -> intentarRegistrar(cluster, puerto, nombre),
-            "registrador-proxy-" + nombre
-        );
-        t.setDaemon(true);
-        t.start();
+        int nodoId = nombre.endsWith("-2") ? 2 : 1;
+        registrarAsync(cluster, nodoId, puerto, nombre, 0, 0, 0);
     }
 
-    /**
-     * Notifica al Proxy que el nodo se está apagando.
-     * Llamar desde shutdown hooks antes de cerrar el ServerSocket.
-     */
-    public static void desregistrar(String cluster, int puerto) {
-        try {
-            MensajeProtocolo req = MensajeProtocolo.request(Constantes.DESREGISTRAR_NODO, null);
-            req.put("cluster", cluster);
-            req.put("puerto",  puerto);
-            enviar(req);
-            LOG.info("[REGISTRADOR] Nodo " + cluster + ":" + puerto + " desregistrado del Proxy.");
-        } catch (Exception e) {
-            LOG.fine("[REGISTRADOR] No se pudo desregistrar del Proxy: " + e.getMessage());
-        }
-    }
-
-    // ── Internos ──────────────────────────────────────────────────────────────
-
-    private static void intentarRegistrar(String cluster, int puerto, String nombre) {
-        for (int i = 1; i <= REINTENTOS; i++) {
-            try { Thread.sleep(ESPERA_MS); } catch (InterruptedException e) { return; }
+    private static void registrarEnTodos(String cluster, int nodoId, int puerto, String nombre,
+                                         int puertoBully, int puertoMutex, int puertoReplicacion) {
+        for (Endpoint proxy : Configuracion.proxies()) {
             try {
                 MensajeProtocolo req = MensajeProtocolo.request(Constantes.REGISTRAR_NODO, null);
-                req.put("cluster", cluster);
-                req.put("host",    Constantes.HOST);
-                req.put("puerto",  puerto);
-                req.put("nombre",  nombre);
-
-                MensajeProtocolo resp = enviar(req);
-                if (resp != null && resp.isOk()) {
-                    LOG.info("[REGISTRADOR] " + nombre + " registrado en Proxy: " + resp.getMensaje());
-                    return;
-                }
+                req.setEmisor(nombre);
+                req.setReceptor("Proxy@" + proxy);
+                req.setLamportClock(RELOJ.tick());
+                req.put("cluster", cluster).put("host", Configuracion.advertisedHost())
+                        .put("puerto", puerto).put("nombre", nombre).put("nodoId", nodoId)
+                        .put("puertoBully", puertoBully).put("puertoMutex", puertoMutex)
+                        .put("puertoReplicacion", puertoReplicacion);
+                SeguridadMensajes.firmarControl(req);
+                MensajeProtocolo resp = ClienteProxy.enviarA(req, proxy);
+                RELOJ.update(resp.getLamportClock());
+                if (!resp.isOk()) LOG.warning("[REGISTRO] " + proxy + ": " + resp.getMensaje());
             } catch (Exception e) {
-                LOG.fine("[REGISTRADOR] Proxy no disponible, intento " + i + "/" + REINTENTOS);
+                LOG.fine("[REGISTRO] Proxy no disponible " + proxy + ": " + e.getMessage());
             }
         }
-        LOG.warning("[REGISTRADOR] No se pudo contactar al Proxy para " + nombre
-                + ". El health-check sincronizará cuando el Proxy levante.");
     }
 
-    private static MensajeProtocolo enviar(MensajeProtocolo req) throws IOException {
-        try (Socket s = new Socket(Constantes.HOST, Constantes.PUERTO_PROXY)) {
-            s.setSoTimeout(Constantes.TIMEOUT_MS);
-            PrintWriter   pw = new PrintWriter(
-                    new OutputStreamWriter(s.getOutputStream(), StandardCharsets.UTF_8), true);
-            BufferedReader br = new BufferedReader(
-                    new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
-            pw.println(req.toJson());
-            String linea = br.readLine();
-            return linea != null ? MensajeProtocolo.fromJson(linea) : null;
+    public static void desregistrar(String cluster, int puerto) {
+        for (Endpoint proxy : Configuracion.proxies()) {
+            try {
+                MensajeProtocolo req = MensajeProtocolo.request(Constantes.DESREGISTRAR_NODO, null);
+                req.setEmisor("nodo:" + puerto);
+                req.setReceptor("Proxy@" + proxy);
+                req.setLamportClock(RELOJ.tick());
+                req.put("cluster", cluster).put("host", Configuracion.advertisedHost())
+                        .put("puerto", puerto);
+                SeguridadMensajes.firmarControl(req);
+                ClienteProxy.enviarA(req, proxy);
+            } catch (Exception e) {
+                LOG.fine("[REGISTRO] No se pudo desregistrar en " + proxy + ": " + e.getMessage());
+            }
         }
     }
 }

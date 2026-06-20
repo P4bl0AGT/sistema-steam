@@ -1,0 +1,5 @@
+@echo off
+title Iniciar topologia completa - Sistema Steam
+cd /d "%~dp0\.."
+powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\start_all.ps1"
+if errorlevel 1 pause

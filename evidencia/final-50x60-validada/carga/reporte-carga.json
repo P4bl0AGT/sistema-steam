@@ -1,0 +1,22 @@
+{
+  "fechaUtc": "2026-06-20T21:40:11.475010Z",
+  "hilos": 50,
+  "duracionSeg": 60,
+  "intentos": 13423,
+  "exitos": 13417,
+  "erroresNegocio": 6,
+  "perdidasTransporte": 0,
+  "tasaPerdidaPct": 0.0,
+  "throughputExitosSeg": 223.61666666666667,
+  "throughputCompletadasSeg": 223.71666666666667,
+  "latenciaPromedioMs": 225.72441302242422,
+  "latenciaP95Ms": 1312.117,
+  "mensajesCoordinacion": 522,
+  "operaciones": {
+    "COMPRAR_JUEGO": 246,
+    "ENVIAR_MENSAJE": 1768,
+    "LISTAR_JUEGOS": 7182,
+    "VER_MENSAJES": 1623,
+    "VER_SALDO": 2604
+  }
+}

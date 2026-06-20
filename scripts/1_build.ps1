@@ -1,73 +1,60 @@
-# build.ps1 - Descarga Gson y compila el proyecto sin Maven
-# Ejecutar desde la carpeta raiz del proyecto: .\scripts\1_build.ps1
+param([switch]$SinPruebas)
 
-$root    = Split-Path $PSScriptRoot -Parent
-$libDir  = "$root\lib"
-$outDir  = "$root\out"
-$gsonJar = "$libDir\gson-2.10.1.jar"
-$gsonUrl = "https://repo1.maven.org/maven2/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar"
-
+$ErrorActionPreference = 'Stop'
+$root = Split-Path $PSScriptRoot -Parent
+$gson = Join-Path $root 'lib\gson-2.10.1.jar'
+$classes = Join-Path $root 'target\classes'
+$testClasses = Join-Path $root 'target\test-classes'
+$jarFile = Join-Path $root 'sistema-steam.jar'
 Set-Location $root
 
-# 1. Crear directorios
-New-Item -ItemType Directory -Force -Path $libDir, $outDir, "$root\data" | Out-Null
-
-# 2. Descargar Gson si no existe
-if (-not (Test-Path $gsonJar)) {
-    Write-Host "Descargando Gson 2.10.1..." -ForegroundColor Cyan
-    Invoke-WebRequest -Uri $gsonUrl -OutFile $gsonJar -UseBasicParsing
-    Write-Host "[OK] Gson descargado." -ForegroundColor Green
-} else {
-    Write-Host "[OK] Gson ya existe en lib/" -ForegroundColor Green
+if (-not (Get-Command java -ErrorAction SilentlyContinue) -or
+    -not (Get-Command javac -ErrorAction SilentlyContinue)) {
+    throw 'Se requiere un JDK 17 o superior (java y javac en PATH).'
+}
+if (-not (Test-Path $gson)) {
+    New-Item -ItemType Directory -Force (Split-Path $gson) | Out-Null
+    Invoke-WebRequest 'https://repo1.maven.org/maven2/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar' -OutFile $gson
 }
 
-# 3. Recolectar todos los .java
-$sources = Get-ChildItem -Recurse -Filter "*.java" -Path "$root\src" |
-           Select-Object -ExpandProperty FullName
-
-Write-Host "`nCompilando $($sources.Count) archivos Java..." -ForegroundColor Cyan
-
-# 4. Limpiar out/ para recompilacion limpia
-Remove-Item -Recurse -Force $outDir -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-
-# 5. Escribir lista de fuentes en un argfile (@-file) que javac entiende.
-#    Usamos barras / en vez de \ porque javac trata \ como escape dentro del argfile.
-#    WriteAllLines escribe UTF-8 SIN BOM (Set-Content -Encoding UTF8 escribe CON BOM en PS5).
-$argFile = "$root\sources.txt"
-[System.IO.File]::WriteAllLines($argFile, ($sources | ForEach-Object { $_ -replace '\\', '/' }))
-
-# 6. Compilar usando el argfile
-javac --release 17 -cp $gsonJar -d $outDir "@$argFile" 2>&1 | Write-Host
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "`n[ERROR] Compilacion fallida. Revisa los errores arriba." -ForegroundColor Red
-    Remove-Item $argFile -ErrorAction SilentlyContinue
-    exit 1
+foreach ($dir in @($classes, $testClasses)) {
+    $full = [IO.Path]::GetFullPath($dir)
+    if (-not $full.StartsWith([IO.Path]::GetFullPath((Join-Path $root 'target')))) {
+        throw "Ruta de build fuera de target: $full"
+    }
+    if (Test-Path $full) { Remove-Item -LiteralPath $full -Recurse -Force }
+    New-Item -ItemType Directory -Force $full | Out-Null
 }
 
-Remove-Item $argFile -ErrorAction SilentlyContinue
-Write-Host "[OK] Compilacion exitosa." -ForegroundColor Green
-
-# 7. Crear JAR
-Write-Host "`nGenerando sistema-steam.jar..." -ForegroundColor Cyan
-Set-Location $outDir
-jar cf "$root\sistema-steam.jar" .
-Set-Location $root
-
-if (Test-Path "$root\sistema-steam.jar") {
-    Write-Host "[OK] sistema-steam.jar creado." -ForegroundColor Green
-} else {
-    Write-Host "[ERROR] No se pudo crear el JAR." -ForegroundColor Red
-    exit 1
+function Invoke-Javac([string[]]$Sources, [string]$Destino, [string]$Classpath) {
+    if ($Sources.Count -eq 0) { return }
+    $argFile = Join-Path $root ("target\sources-" + [guid]::NewGuid() + '.txt')
+    [IO.File]::WriteAllLines($argFile, ($Sources | ForEach-Object { '"' + ($_ -replace '\\','/') + '"' }),
+            [Text.UTF8Encoding]::new($false))
+    try {
+        & javac --release 17 -encoding UTF-8 -cp $Classpath -d $Destino "@$argFile"
+        if ($LASTEXITCODE -ne 0) { throw 'javac termino con error' }
+    } finally { Remove-Item -LiteralPath $argFile -Force -ErrorAction SilentlyContinue }
 }
 
-Write-Host "`nListo. Ejecuta los scripts en orden:" -ForegroundColor Yellow
-Write-Host "  2_run_sesiones1.bat  (puerto 8081)" -ForegroundColor Yellow
-Write-Host "  3_run_sesiones2.bat  (puerto 8181)" -ForegroundColor Yellow
-Write-Host "  4_run_juegos1.bat    (puerto 8082)" -ForegroundColor Yellow
-Write-Host "  5_run_juegos2.bat    (puerto 8282)" -ForegroundColor Yellow
-Write-Host "  6_run_mensajeria1.bat(puerto 8083)" -ForegroundColor Yellow
-Write-Host "  7_run_mensajeria2.bat(puerto 8383)" -ForegroundColor Yellow
-Write-Host "  8_run_proxy.bat      (puerto 8080)" -ForegroundColor Yellow
-Write-Host "  9_run_cliente.bat" -ForegroundColor Yellow
+$mainSources = @(Get-ChildItem 'src\main\java' -Recurse -Filter '*.java' | ForEach-Object FullName)
+Invoke-Javac $mainSources $classes $gson
+$testSources = @(Get-ChildItem 'src\test\java' -Recurse -Filter '*.java' -ErrorAction SilentlyContinue | ForEach-Object FullName)
+Invoke-Javac $testSources $testClasses "$classes;$gson"
+
+$jdkCandidates = @()
+if ($env:JAVA_HOME) { $jdkCandidates += $env:JAVA_HOME }
+$jdkCandidates += @(Get-ChildItem (Join-Path $env:ProgramFiles 'Java') -Directory -Filter 'jdk*' -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending | ForEach-Object FullName)
+$javaHome = $jdkCandidates | Where-Object { Test-Path (Join-Path $_ 'bin\jar.exe') } | Select-Object -First 1
+if (-not $javaHome) { throw 'No se encontro un JDK completo con jar.exe' }
+$jarExe = Join-Path $javaHome 'bin\jar.exe'
+if (Test-Path $jarFile) { Remove-Item -LiteralPath $jarFile -Force }
+& $jarExe --create --file $jarFile -C $classes .
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $jarFile)) { throw 'No se pudo crear sistema-steam.jar' }
+
+if (-not $SinPruebas -and $testSources.Count -gt 0) {
+    & java -cp "$classes;$testClasses;$gson" com.steam.tests.PruebasComponentes
+    if ($LASTEXITCODE -ne 0) { throw 'Fallaron las pruebas de componentes' }
+}
+Write-Host "[OK] Build Java 17: $($mainSources.Count) fuentes, $($testSources.Count) pruebas." -ForegroundColor Green

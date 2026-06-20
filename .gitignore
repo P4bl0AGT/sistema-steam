@@ -1,0 +1,23 @@
+# Build outputs
+/target/
+/out/
+/sistema-steam.jar
+
+# Runtime state
+/data/
+/logs/
+*.lck
+
+# Local demo certificates (includes private keys)
+/certs/
+
+# Keep only the validated, compact evidence set
+/evidencia/*
+!/evidencia/final-50x60-validada/
+!/evidencia/final-50x60-validada/**
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

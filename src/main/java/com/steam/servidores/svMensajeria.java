@@ -35,21 +35,39 @@ import java.util.stream.Collectors;
  */
 public class svMensajeria {
 
-    private static final Logger       LOG          = Logger.getLogger(svMensajeria.class.getName());
-    private static final RelojLamport relojLamport = new RelojLamport();
+    private static final Logger LOG = Logger.getLogger(svMensajeria.class.getName());
 
+    private final int                            nodo;
     private final int                            puerto;
+    private final RelojLamport                   relojLamport;
     private final GestorPersistencia<BDMensajeria> gp;
+    private final ReplicadorEstado<BDMensajeria> replicador;
+    private final CacheIdempotencia               idempotencia = new CacheIdempotencia();
     private final ExecutorService                pool = Executors.newFixedThreadPool(Constantes.POOL_SIZE);
     private final Object                         lock = new Object();
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public svMensajeria(int puerto) {
+        this(puerto == Constantes.PUERTO_MSG_2 ? 2 : 1, puerto);
+    }
+
+    public svMensajeria(int nodo, int puerto) {
+        this.nodo = nodo;
         this.puerto = puerto;
+        this.relojLamport = new RelojLamport("MSG-" + nodo);
         this.gp     = new GestorPersistencia<>(
-                Constantes.MSG_MAIN, Constantes.MSG_COPY, BDMensajeria.class);
+                RutasDatos.main("mensajeria", nodo), RutasDatos.copy("mensajeria", nodo),
+                BDMensajeria.class);
         gp.inicializarSiVacio(new BDMensajeria());
+        int otroNodo = nodo == 1 ? 2 : 1;
+        int localRepl = nodo == 1 ? Constantes.PUERTO_MSG_1_REPL : Constantes.PUERTO_MSG_2_REPL;
+        int peerRepl = nodo == 1 ? Constantes.PUERTO_MSG_2_REPL : Constantes.PUERTO_MSG_1_REPL;
+        this.replicador = new ReplicadorEstado<>("MENSAJERIA", nodo, localRepl,
+                new Endpoint(Configuracion.hostServicio("mensajeria", otroNodo), peerRepl),
+                RutasDatos.version("mensajeria", nodo), BDMensajeria.class,
+                () -> { synchronized (lock) { return gp.leer(); } },
+                estado -> { synchronized (lock) { guardarReplica(estado); } }, relojLamport);
     }
 
     // ── Punto de entrada ──────────────────────────────────────────────────────
@@ -59,18 +77,22 @@ public class svMensajeria {
         int puerto = (nodo == 2) ? Constantes.PUERTO_MSG_2 : Constantes.PUERTO_MSG_1;
         GestorLog.configurar("svMensajeria-" + nodo);
 
-        svMensajeria sv = new svMensajeria(puerto);
+        svMensajeria sv = new svMensajeria(nodo, puerto);
+        sv.replicador.start();
 
         // ── Snapshot periódico: Main → Copy cada 30s (ambos nodos) ─────────
         GestorSnapshot snap = new GestorSnapshot(
-                Constantes.MSG_MAIN, Constantes.MSG_COPY, "svMensajeria-" + nodo, 30);
+                RutasDatos.main("mensajeria", nodo), RutasDatos.copy("mensajeria", nodo),
+                "svMensajeria-" + nodo, 30);
         snap.start(nodo == 1 ? 30 : 45);
 
         // ── Registro dinámico en el Proxy ────────────────────────────────────
-        RegistradorProxy.registrarAsync("MENSAJERIA", puerto, "MSG-" + nodo);
+        int puertoRepl = nodo == 1 ? Constantes.PUERTO_MSG_1_REPL : Constantes.PUERTO_MSG_2_REPL;
+        RegistradorProxy.registrarAsync("MENSAJERIA", nodo, puerto, "MSG-" + nodo,
+                0, 0, puertoRepl);
 
         Runtime.getRuntime().addShutdownHook(new Thread(
-            () -> RegistradorProxy.desregistrar("MENSAJERIA", puerto),
+            () -> { sv.replicador.stop(); RegistradorProxy.desregistrar("MENSAJERIA", puerto); },
             "shutdown-mensajeria-" + nodo
         ));
 
@@ -79,8 +101,7 @@ public class svMensajeria {
 
     public void escuchar() {
         LOG.info("=== svMensajeria iniciado en puerto " + puerto + " ===");
-        try (ServerSocket server = new ServerSocket(puerto)) {
-            server.setReuseAddress(true);
+        try (ServerSocket server = Transporte.servidor(puerto)) {
             while (true) {
                 Socket cliente = server.accept();
                 pool.submit(() -> manejarCliente(cliente));
@@ -99,20 +120,26 @@ public class svMensajeria {
              PrintWriter    out = new PrintWriter(
                      new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true)) {
 
-            socket.setSoTimeout(Constantes.TIMEOUT_MS);
-            String linea = in.readLine();
+            String linea = LineaJson.leer(in, Configuracion.maxMessageBytes());
             if (linea == null) return;
 
             MensajeProtocolo req = MensajeProtocolo.fromJson(linea);
+            String error = SeguridadMensajes.validarSolicitud(req);
+            if (error != null) {
+                out.println(MensajeProtocolo.error(req == null ? "?" : req.getRequestId(), error).toJson());
+                return;
+            }
             relojLamport.update(req.getLamportClock());
 
-            MensajeProtocolo resp = procesar(req);
+            MensajeProtocolo resp = idempotencia.ejecutar(req.getRequestId(), () -> procesar(req));
             resp.setLamportClock(relojLamport.tick());
+            resp.setEmisor("MSG-" + nodo);
+            resp.setReceptor(req.getEmisor());
             out.println(resp.toJson());
 
         } catch (SocketTimeoutException e) {
             LOG.warning("[MSG] Timeout en cliente");
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             LOG.warning("[MSG] IO: " + e.getMessage());
         }
     }
@@ -128,6 +155,7 @@ public class svMensajeria {
 
         return switch (req.getOperacion()) {
             case Constantes.HEALTH_CHECK    -> healthCheck(req);
+            case Constantes.ESTADO_REPLICACION -> estadoReplicacion(req);
             case Constantes.ENVIAR_MENSAJE  -> enviarMensaje(req);
             case Constantes.VER_MENSAJES    -> verMensajes(req);
             case Constantes.VER_CONVERSACION -> verConversacion(req);
@@ -141,6 +169,13 @@ public class svMensajeria {
     private MensajeProtocolo healthCheck(MensajeProtocolo req) {
         MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "svMensajeria OK");
         resp.put("puerto", puerto);
+        return resp;
+    }
+
+    private MensajeProtocolo estadoReplicacion(MensajeProtocolo req) {
+        MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "Replica de mensajeria");
+        resp.put("nodo", nodo).put("version", replicador.getVersionActual())
+                .put("peer", replicador.getPeer().toString());
         return resp;
     }
 
@@ -180,10 +215,11 @@ public class svMensajeria {
                     auth.username(), receptor, contenido);
             // Guardar el reloj de Lamport del momento de envío para ordenamiento causal
             msg.lamportClock = relojLamport.tick();
+            msg.nodoEmisor = nodo;
             bd.mensajes.add(msg);
 
             try {
-                gp.guardar(bd);  // Main + Copy (Alta Disponibilidad)
+                guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
                 return MensajeProtocolo.error(req.getRequestId(), "Error de persistencia");
             }
@@ -224,7 +260,7 @@ public class svMensajeria {
 
             if (cambios) {
                 try {
-                    gp.guardar(bd);
+                    guardarReplicado(bd, req.getRequestId());
                 } catch (IOException e) {
                     LOG.warning("[MSG] Error guardando ACKs: " + e.getMessage());
                 }
@@ -271,8 +307,7 @@ public class svMensajeria {
                                  (m.emisor.equals(conUsuario) && m.receptor.equals(yo)))
                     // Ordenar por Lamport para orden causal correcto
                     // (fallback a timestamp si lamportClock == 0 por mensajes anteriores)
-                    .sorted(Comparator.comparingLong((com.steam.models.Mensaje m) ->
-                            m.lamportClock > 0 ? m.lamportClock : m.timestamp))
+                    .sorted(OrdenMensajes.COMPARATOR)
                     .map(m -> {
                         Map<String, Object> info = new LinkedHashMap<>();
                         info.put("de",          m.emisor);
@@ -290,5 +325,16 @@ public class svMensajeria {
             resp.put("conversacion", conversacion);
             return resp;
         }
+    }
+    private void guardarReplicado(BDMensajeria bd, String requestId) throws IOException {
+        gp.guardar(bd);
+        ReplicadorEstado.Resultado resultado = replicador.registrarCambioLocal(bd, requestId);
+        LOG.info("[REPL] requestId=" + requestId + " version=" + resultado.version()
+                + " confirmada=" + resultado.confirmada());
+    }
+
+    private void guardarReplica(BDMensajeria estado) {
+        try { gp.guardar(estado); }
+        catch (IOException e) { throw new IllegalStateException("No se pudo aplicar replica", e); }
     }
 }

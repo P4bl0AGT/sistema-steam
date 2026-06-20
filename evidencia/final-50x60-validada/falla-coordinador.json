@@ -1,0 +1,9 @@
+{
+  "fechaUtc": "2026-06-20T21:39:32.740144600Z",
+  "coordinadorCaido": 2,
+  "puertoCaido": 8282,
+  "nodoSobreviviente": 1,
+  "recuperado": true,
+  "nuevoCoordinador": 1,
+  "recuperacionMs": 3474
+}

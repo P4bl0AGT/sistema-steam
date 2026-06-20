@@ -1,7 +1,10 @@
 package com.steam.coordinacion;
 
 import com.steam.common.Constantes;
+import com.steam.common.Configuracion;
+import com.steam.common.LineaJson;
 import com.steam.common.RelojLamport;
+import com.steam.common.Transporte;
 
 import java.io.*;
 import java.net.*;
@@ -59,6 +62,7 @@ public class GestorBully {
         t.setDaemon(true);
         return t;
     });
+    private volatile ServerSocket serverSocket;
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -85,6 +89,7 @@ public class GestorBully {
 
     public void stop() {
         stopped.set(true);
+        try { if (serverSocket != null) serverSocket.close(); } catch (IOException ignored) {}
         pool.shutdownNow();
     }
 
@@ -98,8 +103,8 @@ public class GestorBully {
 
     private void iniciarServidorBully() {
         Thread t = new Thread(() -> {
-            try (ServerSocket server = new ServerSocket(miPuertoBully)) {
-                server.setReuseAddress(true);
+            try (ServerSocket server = Transporte.servidor(miPuertoBully)) {
+                serverSocket = server;
                 LOG.info("[BULLY] Escuchando en puerto " + miPuertoBully);
                 while (!stopped.get()) {
                     try {
@@ -127,11 +132,11 @@ public class GestorBully {
              PrintWriter    out = new PrintWriter(
                      new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true)) {
 
-            socket.setSoTimeout(Constantes.TIMEOUT_MS);
-            String linea = in.readLine();
+            String linea = LineaJson.leer(in, Configuracion.maxMessageBytes());
             if (linea == null) return;
 
             MensajeBully msg = MensajeBully.fromJson(linea);
+            if (msg == null || !msg.firmaValida() || !emisorConocido(msg.emisorId)) return;
             reloj.update(msg.lamportClock);
 
             switch (msg.tipo) {
@@ -140,6 +145,7 @@ public class GestorBully {
                         // Respondo OK en la misma conexión
                         MensajeBully ok = new MensajeBully(
                                 MensajeBully.OK, miId, -1, reloj.tick());
+                        ok.firmar();
                         out.println(ok.toJson());
                         mensajesEnviados.incrementAndGet();
                         LOG.info("[BULLY] t=" + ok.lamportClock
@@ -151,6 +157,7 @@ public class GestorBully {
                     }
                 }
                 case MensajeBully.COORDINATOR -> {
+                    if (msg.coordinadorId != msg.emisorId) return;
                     coordinadorActual = msg.coordinadorId;
                     LOG.info("[BULLY] t=" + reloj.get()
                             + " COORDINATOR recibido, nuevo coordinador=" + msg.coordinadorId);
@@ -161,6 +168,7 @@ public class GestorBully {
                     // Respondemos OK para confirmar que seguimos vivos
                     MensajeBully resp = new MensajeBully(
                             MensajeBully.OK, miId, coordinadorActual, reloj.tick());
+                    resp.firmar();
                     out.println(resp.toJson());
                     mensajesEnviados.incrementAndGet();
                 }
@@ -253,8 +261,7 @@ public class GestorBully {
 
     /** Envía ELECTION y espera OK en la misma conexión TCP. */
     private boolean enviarEleccionYEsperarOk(NodoInfo peer) {
-        try (Socket socket = new Socket(peer.host, peer.puertoBully)) {
-            socket.setSoTimeout(Constantes.TIMEOUT_BULLY_OK_MS);
+        try (Socket socket = Transporte.conectar(peer.host, peer.puertoBully)) {
             PrintWriter   out = new PrintWriter(
                     new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
             BufferedReader in = new BufferedReader(
@@ -262,14 +269,16 @@ public class GestorBully {
 
             long t = reloj.tick();
             MensajeBully msg = new MensajeBully(MensajeBully.ELECTION, miId, -1, t);
+            msg.firmar();
             LOG.info("[BULLY] t=" + t + " ELECTION enviado a nodo-" + peer.id);
             out.println(msg.toJson());
             mensajesEnviados.incrementAndGet();
 
-            String respLine = in.readLine();
+            String respLine = LineaJson.leer(in, Configuracion.maxMessageBytes());
             if (respLine == null) return false;
 
             MensajeBully resp = MensajeBully.fromJson(respLine);
+            if (!resp.firmaValida() || resp.emisorId != peer.id) return false;
             reloj.update(resp.lamportClock);
             boolean esOk = MensajeBully.OK.equals(resp.tipo);
             if (esOk) LOG.info("[BULLY] t=" + reloj.get() + " OK recibido de nodo-" + peer.id);
@@ -295,10 +304,12 @@ public class GestorBully {
 
     /** Envía un mensaje sin esperar respuesta (fire-and-forget). */
     private void enviarUnidireccional(MensajeBully msg, int puerto) {
-        try (Socket socket = new Socket(Constantes.HOST, puerto)) {
-            socket.setSoTimeout(Constantes.TIMEOUT_MS);
+        NodoInfo peer = peers.stream().filter(p -> p.puertoBully == puerto).findFirst().orElse(null);
+        String host = peer == null ? Configuracion.advertisedHost() : peer.host;
+        try (Socket socket = Transporte.conectar(host, puerto)) {
             PrintWriter out = new PrintWriter(
                     new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
+            msg.firmar();
             out.println(msg.toJson());
             mensajesEnviados.incrementAndGet();
         } catch (IOException e) {
@@ -338,8 +349,7 @@ public class GestorBully {
     }
 
     private boolean checkHeartbeat(NodoInfo coord) {
-        try (Socket socket = new Socket(coord.host, coord.puertoBully)) {
-            socket.setSoTimeout(Constantes.TIMEOUT_BULLY_OK_MS);
+        try (Socket socket = Transporte.conectar(coord.host, coord.puertoBully)) {
             PrintWriter   out = new PrintWriter(
                     new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
             BufferedReader in = new BufferedReader(
@@ -347,15 +357,23 @@ public class GestorBully {
 
             MensajeBully hb = new MensajeBully(
                     MensajeBully.HEARTBEAT_COORD, miId, coord.id, reloj.tick());
+            hb.firmar();
             out.println(hb.toJson());
             mensajesEnviados.incrementAndGet();
 
-            String resp = in.readLine();
+            String resp = LineaJson.leer(in, Configuracion.maxMessageBytes());
             if (resp != null) {
-                reloj.update(MensajeBully.fromJson(resp).lamportClock);
-                return true;
+                MensajeBully mensaje = MensajeBully.fromJson(resp);
+                if (mensaje.firmaValida() && mensaje.emisorId == coord.id) {
+                    reloj.update(mensaje.lamportClock);
+                    return true;
+                }
             }
         } catch (IOException ignored) {}
         return false;
+    }
+
+    private boolean emisorConocido(int id) {
+        return id == miId || peers.stream().anyMatch(p -> p.id == id);
     }
 }

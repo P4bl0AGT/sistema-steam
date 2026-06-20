@@ -21,6 +21,10 @@ public class Sesion {
 
     public boolean vigente() {
         // Las sesiones no expiran automáticamente; se invalidan en logout
-        return activa;
+        return vigente(com.steam.common.Configuracion.tokenTtlMs());
+    }
+
+    public boolean vigente(long ttlMs) {
+        return activa && System.currentTimeMillis() - ultimaActividad <= ttlMs;
     }
 }

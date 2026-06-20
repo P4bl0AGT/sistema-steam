@@ -1,353 +1,341 @@
 package com.steam.proxy;
 
+import com.google.gson.JsonParseException;
 import com.steam.common.*;
 import com.steam.coordinacion.EstadoNodo;
 import com.steam.coordinacion.RegistroMembresia;
 
-import java.io.*;
-import java.net.*;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.logging.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-/**
- * Proxy.java – Capa de Intermediación (Gateway)
- *
- * Responsabilidades:
- *  1. Escucha conexiones de clientes en el puerto 8080.
- *  2. Acepta registros dinámicos de nodos (REGISTRAR_NODO / DESREGISTRAR_NODO).
- *     Los servidores se registran al arrancar usando RegistradorProxy.
- *  3. Inspecciona la operación del mensaje para determinar el clúster destino.
- *  4. Aplica Round-Robin por clúster eligiendo el nodo activo.
- *  5. Reenvía el mensaje al nodo seleccionado y devuelve la respuesta al cliente.
- *  6. Un hilo daemon realiza Health Checks cada 10 s y marca nodos caídos.
- *     Si el nodo primario cae, las peticiones se redirigen automáticamente al espejo.
- *
- * INTEGRACIÓN CON LOS SERVIDORES:
- *  - Los servidores (svSesiones, svJuegos, svMensajeria) envían REGISTRAR_NODO
- *    al arrancar. El Proxy los registra dinámicamente en su tabla de ruteo.
- *  - Al apagarse (graceful), los servidores envían DESREGISTRAR_NODO.
- *  - El health-check sigue ejecutándose como mecanismo de detección complementario.
- *
- * MODELO DE FALLOS cubierto:
- *  - Crash de nodo: detectado por timeout en health check → failover al espejo.
- *  - Omisión de envío: si la conexión al servidor falla, se intenta el otro nodo.
- *  - Fallo de temporización: socket con SO_TIMEOUT=5 s.
- */
+/** Gateway redundante: cada proceso mantiene su propia membresia, RR y health. */
 public class Proxy {
+    private static final Logger LOG = Logger.getLogger(Proxy.class.getName());
 
-    private static final Logger          LOG          = Logger.getLogger(Proxy.class.getName());
-    private static final RelojLamport    relojLamport = new RelojLamport();
-    private static final RegistroMembresia membresia  = new RegistroMembresia();
-
-    // ── Representación de un nodo ─────────────────────────────────────────────
-
-    static class Nodo {
+    static final class Nodo {
+        final String id;
         final String nombre;
-        final int    puerto;
-        final AtomicBoolean activo = new AtomicBoolean(true);
+        final String cluster;
+        final String host;
+        final int puerto;
+        final int nodoId;
+        final int puertoBully;
+        final int puertoMutex;
+        final int puertoReplicacion;
+        final AtomicBoolean activo = new AtomicBoolean(false);
 
-        Nodo(String nombre, int puerto) {
+        Nodo(String nombre, String cluster, String host, int puerto, int nodoId,
+             int puertoBully, int puertoMutex, int puertoReplicacion) {
+            this.id = cluster + "-" + host + ":" + puerto;
             this.nombre = nombre;
+            this.cluster = cluster;
+            this.host = host;
             this.puerto = puerto;
+            this.nodoId = nodoId;
+            this.puertoBully = puertoBully;
+            this.puertoMutex = puertoMutex;
+            this.puertoReplicacion = puertoReplicacion;
         }
     }
 
-    // ── Clústeres y contadores Round-Robin ────────────────────────────────────
-    // CopyOnWriteArrayList: permite iteración concurrente sin locks en rutear()
-    // mientras procesarRegistro() puede añadir nodos sin ConcurrentModificationException.
-
-    private final List<Nodo> clusterSesiones   = new CopyOnWriteArrayList<>();
-    private final List<Nodo> clusterJuegos     = new CopyOnWriteArrayList<>();
+    private final int proxyId;
+    private final int puerto;
+    private final String nombre;
+    private final RelojLamport reloj;
+    private final RegistroMembresia membresia;
+    private final CacheIdempotencia idempotencia = new CacheIdempotencia();
+    private final List<Nodo> clusterSesiones = new CopyOnWriteArrayList<>();
+    private final List<Nodo> clusterJuegos = new CopyOnWriteArrayList<>();
     private final List<Nodo> clusterMensajeria = new CopyOnWriteArrayList<>();
+    private final AtomicInteger rrSesiones = new AtomicInteger();
+    private final AtomicInteger rrJuegos = new AtomicInteger();
+    private final AtomicInteger rrMensajeria = new AtomicInteger();
+    private final ExecutorService pool = Executors.newFixedThreadPool(Constantes.POOL_SIZE);
 
-    // Contadores atómicos por clúster (Round-Robin sin estado compartido problemático)
-    private final AtomicInteger rrSesiones   = new AtomicInteger(0);
-    private final AtomicInteger rrJuegos     = new AtomicInteger(0);
-    private final AtomicInteger rrMensajeria = new AtomicInteger(0);
-
-    // Pool de hilos para atender clientes
-    private final ExecutorService pool =
-            Executors.newFixedThreadPool(Constantes.POOL_SIZE);
-
-    // ── Constructor ───────────────────────────────────────────────────────────
-
-    public Proxy() {
-        clusterSesiones.add(new Nodo("SES-1", Constantes.PUERTO_SES_1));
-        clusterSesiones.add(new Nodo("SES-2", Constantes.PUERTO_SES_2));
-
-        clusterJuegos.add(new Nodo("JUE-1", Constantes.PUERTO_JUE_1));
-        clusterJuegos.add(new Nodo("JUE-2", Constantes.PUERTO_JUE_2));
-
-        clusterMensajeria.add(new Nodo("MSG-1", Constantes.PUERTO_MSG_1));
-        clusterMensajeria.add(new Nodo("MSG-2", Constantes.PUERTO_MSG_2));
+    public Proxy(int proxyId, int puerto) {
+        this.proxyId = proxyId;
+        this.puerto = puerto;
+        this.nombre = "Proxy-" + proxyId;
+        this.reloj = new RelojLamport(nombre);
+        this.membresia = new RegistroMembresia("data/proxy-" + proxyId + "/MEMBRESIA.json");
+        cargarTopologiaBase();
     }
 
-    // ── Punto de entrada ──────────────────────────────────────────────────────
+    private void cargarTopologiaBase() {
+        agregarSiAusente(new Nodo("SES-1", "SESIONES", Configuracion.hostServicio("sesiones", 1),
+                Constantes.PUERTO_SES_1, 1, 0, 0, Constantes.PUERTO_SES_1_REPL));
+        agregarSiAusente(new Nodo("SES-2", "SESIONES", Configuracion.hostServicio("sesiones", 2),
+                Constantes.PUERTO_SES_2, 2, 0, 0, Constantes.PUERTO_SES_2_REPL));
+        agregarSiAusente(new Nodo("JUE-1", "JUEGOS", Configuracion.hostServicio("juegos", 1),
+                Constantes.PUERTO_JUE_1, 1, Constantes.PUERTO_JUE_1_BULLY,
+                Constantes.PUERTO_JUE_1_MUTEX, Constantes.PUERTO_JUE_1_REPL));
+        agregarSiAusente(new Nodo("JUE-2", "JUEGOS", Configuracion.hostServicio("juegos", 2),
+                Constantes.PUERTO_JUE_2, 2, Constantes.PUERTO_JUE_2_BULLY,
+                Constantes.PUERTO_JUE_2_MUTEX, Constantes.PUERTO_JUE_2_REPL));
+        agregarSiAusente(new Nodo("MSG-1", "MENSAJERIA", Configuracion.hostServicio("mensajeria", 1),
+                Constantes.PUERTO_MSG_1, 1, 0, 0, Constantes.PUERTO_MSG_1_REPL));
+        agregarSiAusente(new Nodo("MSG-2", "MENSAJERIA", Configuracion.hostServicio("mensajeria", 2),
+                Constantes.PUERTO_MSG_2, 2, 0, 0, Constantes.PUERTO_MSG_2_REPL));
+    }
 
     public static void main(String[] args) {
-        GestorLog.configurar("Proxy");
-        Proxy proxy = new Proxy();
+        int id = args.length > 0 ? Integer.parseInt(args[0]) : 1;
+        int defaultPort = id == 2 ? Constantes.PUERTO_PROXY_2 : Constantes.PUERTO_PROXY;
+        int port = args.length > 1 ? Integer.parseInt(args[1]) : defaultPort;
+        GestorLog.configurar("Proxy-" + id);
+        Proxy proxy = new Proxy(id, port);
         proxy.iniciarHealthCheck();
         proxy.escuchar();
     }
 
-    /** Arranca el servidor en el puerto del Proxy. */
     public void escuchar() {
-        LOG.info("=== Proxy iniciado en puerto " + Constantes.PUERTO_PROXY + " ===");
-        try (ServerSocket server = new ServerSocket(Constantes.PUERTO_PROXY)) {
-            server.setReuseAddress(true);
-            while (true) {
+        LOG.info("[PROXY] " + nombre + " iniciado en " + Configuracion.bindHost() + ":" + puerto
+                + " tls=" + Configuracion.tlsEnabled());
+        try (ServerSocket server = Transporte.servidor(puerto)) {
+            while (!Thread.currentThread().isInterrupted()) {
                 Socket cliente = server.accept();
-                // Cada conexión de cliente se atiende en un hilo del pool
                 pool.submit(() -> manejarCliente(cliente));
             }
-        } catch (IOException e) {
-            LOG.severe("Error crítico en Proxy: " + e.getMessage());
+        } catch (Exception e) {
+            LOG.severe("[PROXY] Error critico: " + e.getMessage());
+        } finally {
+            pool.shutdownNow();
         }
     }
 
-    // ── Manejo de cliente ─────────────────────────────────────────────────────
-
-    /**
-     * Lee el mensaje JSON del cliente.
-     * - REGISTRAR_NODO / DESREGISTRAR_NODO: gestionados internamente por el Proxy
-     *   (los servidores usan RegistradorProxy para integrarse al arrancar/parar).
-     * - Resto de operaciones: ruteadas al clúster destino con Round-Robin.
-     */
     private void manejarCliente(Socket cliente) {
         try (cliente;
-             BufferedReader in  = new BufferedReader(
-                     new InputStreamReader(cliente.getInputStream(), StandardCharsets.UTF_8));
-             PrintWriter    out = new PrintWriter(
-                     new OutputStreamWriter(cliente.getOutputStream(), StandardCharsets.UTF_8), true)) {
-
-            cliente.setSoTimeout(Constantes.TIMEOUT_MS);
-            String linea = in.readLine();
+             BufferedReader in = new BufferedReader(new InputStreamReader(
+                     cliente.getInputStream(), StandardCharsets.UTF_8));
+             PrintWriter out = new PrintWriter(new OutputStreamWriter(
+                     cliente.getOutputStream(), StandardCharsets.UTF_8), true)) {
+            String linea = LineaJson.leer(in);
             if (linea == null || linea.isBlank()) return;
-
-            MensajeProtocolo req = MensajeProtocolo.fromJson(linea);
-            if (req == null) {
-                out.println(MensajeProtocolo.error("?", "Mensaje mal formado").toJson());
+            MensajeProtocolo req;
+            try { req = MensajeProtocolo.fromJson(linea); }
+            catch (JsonParseException | IllegalStateException e) {
+                out.println(error("?", "JSON_MALFORMADO", "Mensaje JSON mal formado").toJson());
+                return;
+            }
+            String seguridad = SeguridadMensajes.validarSolicitud(req);
+            if (seguridad != null) {
+                out.println(error(req != null ? req.getRequestId() : "?",
+                        "SECURITY", seguridad).toJson());
                 return;
             }
 
-            // Operaciones de control: el Proxy las gestiona directamente
-            // sin reenviar al backend (patrón integración bidireccional).
-            if (Constantes.REGISTRAR_NODO.equals(req.getOperacion())) {
-                out.println(procesarRegistro(req).toJson());
-                return;
-            }
-            if (Constantes.DESREGISTRAR_NODO.equals(req.getOperacion())) {
-                out.println(procesarDesregistro(req).toJson());
-                return;
-            }
-
-            LOG.info("[PROXY] " + req.getOperacion() + " → " + req.getRequestId());
-
-            MensajeProtocolo resp = rutear(req);
+            long recibido = reloj.update(req.getLamportClock());
+            MensajeProtocolo resp = idempotencia.ejecutar(req.getRequestId(), () -> procesar(req));
+            resp.setLamportClock(reloj.tick());
+            resp.setEmisor(nombre);
+            resp.setReceptor(req.getEmisor());
+            LogDistribuido.evento(LOG, Level.INFO, nombre, req.getOperacion(),
+                    req.getRequestId(), recibido, req.getEmisor(), nombre,
+                    resp.isOk() ? "OK" : resp.getCodigoError());
             out.println(resp.toJson());
-
         } catch (SocketTimeoutException e) {
-            LOG.warning("[PROXY] Timeout leyendo del cliente");
-        } catch (IOException e) {
-            LOG.warning("[PROXY] IO cliente: " + e.getMessage());
+            LOG.warning("[PROXY] Timeout leyendo cliente: " + e.getMessage());
+        } catch (Exception e) {
+            LOG.warning("[PROXY] Error manejando cliente: " + e.getMessage());
         }
     }
 
-    // ── Registro dinámico de nodos ────────────────────────────────────────────
-
-    /**
-     * Registra o reactiva un nodo en el clúster correspondiente.
-     * Invocado por los servidores al arrancar a través de RegistradorProxy.
-     */
-    private MensajeProtocolo procesarRegistro(MensajeProtocolo req) {
-        String cluster = req.getString("cluster");
-        int    puerto  = req.getInt("puerto");
-        String nombre  = req.getString("nombre");
-
-        if (cluster == null || puerto == 0 || nombre == null) {
-            return MensajeProtocolo.error(req.getRequestId(),
-                    "REGISTRAR_NODO requiere: cluster, puerto, nombre");
-        }
-
-        List<Nodo> nodos = obtenerCluster(cluster);
-        if (nodos == null) {
-            return MensajeProtocolo.error(req.getRequestId(), "Cluster desconocido: " + cluster);
-        }
-
-        synchronized (nodos) {
-            Nodo existente = nodos.stream()
-                    .filter(n -> n.puerto == puerto).findFirst().orElse(null);
-            if (existente != null) {
-                existente.activo.set(true);
-                LOG.info("[REGISTRO] Nodo " + nombre + " re-registrado activo (cluster=" + cluster + " puerto=" + puerto + ")");
-            } else {
-                nodos.add(new Nodo(nombre, puerto));
-                LOG.info("[REGISTRO] Nuevo nodo: " + nombre + " cluster=" + cluster + " puerto=" + puerto);
-            }
-        }
-
-        // Actualizar membresía
-        long t = relojLamport.tick();
-        EstadoNodo estado = new EstadoNodo(puerto, Constantes.HOST, puerto, 0, 0, t);
-        estado.activo = true;
-        membresia.registrar(estado);
-
-        return MensajeProtocolo.ok(req.getRequestId(),
-                "Nodo " + nombre + " registrado en cluster " + cluster);
-    }
-
-    /**
-     * Marca un nodo como inactivo cuando el servidor avisa que se va a detener.
-     */
-    private MensajeProtocolo procesarDesregistro(MensajeProtocolo req) {
-        String cluster = req.getString("cluster");
-        int    puerto  = req.getInt("puerto");
-
-        List<Nodo> nodos = obtenerCluster(cluster);
-        if (nodos != null) {
-            synchronized (nodos) {
-                nodos.stream().filter(n -> n.puerto == puerto).findFirst()
-                        .ifPresent(n -> {
-                            n.activo.set(false);
-                            LOG.info("[REGISTRO] Nodo " + n.nombre + " (puerto=" + puerto + ") desregistrado.");
-                        });
-            }
-            membresia.marcarCaido(puerto);
-        }
-
-        return MensajeProtocolo.ok(req.getRequestId(), "Nodo desregistrado");
-    }
-
-    /** Retorna la lista de nodos del clúster, o null si el nombre es inválido. */
-    private List<Nodo> obtenerCluster(String cluster) {
-        return switch (cluster) {
-            case "SESIONES"   -> clusterSesiones;
-            case "JUEGOS"     -> clusterJuegos;
-            case "MENSAJERIA" -> clusterMensajeria;
-            default           -> null;
+    private MensajeProtocolo procesar(MensajeProtocolo req) {
+        return switch (req.getOperacion()) {
+            case Constantes.REGISTRAR_NODO -> procesarRegistro(req);
+            case Constantes.DESREGISTRAR_NODO -> procesarDesregistro(req);
+            case Constantes.ESTADO_MEMBRESIA -> estadoMembresia(req);
+            case Constantes.SHUTDOWN_PROXY -> shutdown(req);
+            default -> rutear(req);
         };
     }
 
-    // ── Ruteo Round-Robin ─────────────────────────────────────────────────────
+    private MensajeProtocolo procesarRegistro(MensajeProtocolo req) {
+        if (!SeguridadMensajes.validarControl(req))
+            return error(req.getRequestId(), "UNAUTHORIZED", "Firma de registro invalida");
+        String cluster = req.getString("cluster");
+        String host = req.getString("host");
+        String nombreNodo = req.getString("nombre");
+        int port = req.getInt("puerto");
+        int nodoId = req.getInt("nodoId");
+        if (!List.of("SESIONES", "JUEGOS", "MENSAJERIA").contains(cluster)
+                || host == null || host.isBlank() || host.length() > 253
+                || nombreNodo == null || !nombreNodo.matches("[A-Z]{3}-[1-9][0-9]*")
+                || port < 1 || port > 65_535 || nodoId < 1) {
+            return error(req.getRequestId(), "INVALID_REGISTRATION", "Registro de nodo malformado");
+        }
+        Nodo nodo = new Nodo(nombreNodo, cluster, host, port, nodoId,
+                req.getInt("puertoBully"), req.getInt("puertoMutex"),
+                req.getInt("puertoReplicacion"));
+        Nodo real = agregarSiAusente(nodo);
+        real.activo.set(true);
+        registrarMembresia(real, reloj.tick());
+        return MensajeProtocolo.ok(req.getRequestId(), nombreNodo + " registrado en " + nombre);
+    }
 
-    /**
-     * Determina el clúster según la operación, elige el nodo por Round-Robin
-     * y reenvía. Si el nodo primario falla, intenta el espejo.
-     */
+    private MensajeProtocolo procesarDesregistro(MensajeProtocolo req) {
+        if (!SeguridadMensajes.validarControl(req))
+            return error(req.getRequestId(), "UNAUTHORIZED", "Firma de desregistro invalida");
+        String cluster = req.getString("cluster");
+        String host = req.getString("host");
+        int port = req.getInt("puerto");
+        List<Nodo> nodos = obtenerCluster(cluster);
+        if (nodos != null) nodos.stream()
+                .filter(n -> n.puerto == port && n.host.equals(host)).findFirst()
+                .ifPresent(n -> { n.activo.set(false); membresia.marcarCaido(n.id); });
+        return MensajeProtocolo.ok(req.getRequestId(), "Nodo desregistrado");
+    }
+
+    private MensajeProtocolo estadoMembresia(MensajeProtocolo req) {
+        if (!SeguridadMensajes.validarControl(req))
+            return error(req.getRequestId(), "UNAUTHORIZED", "Firma de control invalida");
+        MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "Membresia de " + nombre);
+        resp.put("proxyId", proxyId).put("miembros", membresia.getTodos());
+        return resp;
+    }
+
+    private MensajeProtocolo shutdown(MensajeProtocolo req) {
+        if (!SeguridadMensajes.validarControl(req))
+            return error(req.getRequestId(), "UNAUTHORIZED", "Firma de apagado invalida");
+        MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), nombre + " cerrando");
+        new Thread(() -> {
+            try { Thread.sleep(250); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            System.exit(0);
+        }, "shutdown-proxy").start();
+        return resp;
+    }
+
     private MensajeProtocolo rutear(MensajeProtocolo req) {
         String cluster = Utils.clusterParaOperacion(req.getOperacion());
-
-        List<Nodo>    nodos;
-        AtomicInteger rr;
-
-        switch (cluster) {
-            case "SESIONES"   -> { nodos = clusterSesiones;   rr = rrSesiones;   }
-            case "JUEGOS"     -> { nodos = clusterJuegos;     rr = rrJuegos;     }
-            case "MENSAJERIA" -> { nodos = clusterMensajeria; rr = rrMensajeria; }
-            default -> {
-                return MensajeProtocolo.error(req.getRequestId(),
-                        "Operación desconocida: " + req.getOperacion());
-            }
-        }
-
-        // Round-Robin seguro: Math.abs(Integer.MIN_VALUE) == Integer.MIN_VALUE (negativo),
-        // por lo que usar solo Math.abs puede producir índice negativo al desbordarse.
-        // La expresión (x % n + n) % n garantiza resultado positivo para cualquier x.
-        int inicio = ((rr.getAndIncrement() % nodos.size()) + nodos.size()) % nodos.size();
+        List<Nodo> nodos = obtenerCluster(cluster);
+        if (nodos == null) return error(req.getRequestId(), "UNKNOWN_OPERATION",
+                "Operacion desconocida: " + req.getOperacion());
+        AtomicInteger rr = contador(cluster);
+        int inicio = Utils.esOperacionEscritura(req.getOperacion())
+                ? indicePrimario(nodos) : Math.floorMod(rr.getAndIncrement(), nodos.size());
+        boolean algunoActivo = false;
         for (int i = 0; i < nodos.size(); i++) {
             Nodo nodo = nodos.get((inicio + i) % nodos.size());
             if (!nodo.activo.get()) continue;
-
+            algunoActivo = true;
             try {
-                // Evento de envío: tick Lamport antes de reenviar al servidor
-                req.setLamportClock(relojLamport.tick());
-                LOG.fine("[LAMPORT-PROXY] t=" + req.getLamportClock() + " → nodo=" + nodo.nombre);
-                MensajeProtocolo resp = reenviar(req, nodo.puerto);
-                if (resp != null) {
-                    relojLamport.update(resp.getLamportClock());
-                    return resp;
-                }
+                req.setEmisor(nombre);
+                req.setReceptor(nodo.nombre);
+                req.setLamportClock(reloj.tick());
+                MensajeProtocolo resp = reenviar(req, nodo);
+                reloj.update(resp.getLamportClock());
+                return resp;
             } catch (Exception e) {
-                LOG.warning("[PROXY] Nodo " + nodo.nombre + " falló: " + e.getMessage());
-                nodo.activo.set(false); // marcado caído hasta el próximo health check
+                nodo.activo.set(false);
+                membresia.marcarCaido(nodo.id);
+                LOG.warning("[PROXY] " + nodo.nombre + " fallo en " + req.getOperacion()
+                        + ": " + e.getMessage());
             }
         }
-
-        return MensajeProtocolo.error(req.getRequestId(),
-                "Todos los nodos del clúster " + cluster + " están caídos");
+        return error(req.getRequestId(), "SERVICE_UNAVAILABLE",
+                algunoActivo ? "Los nodos activos no respondieron" : "Cluster " + cluster + " sin nodos activos");
     }
 
-    /** Abre conexión TCP al servidor, envía req y retorna la respuesta. */
-    private MensajeProtocolo reenviar(MensajeProtocolo req, int puerto) throws IOException {
-        try (Socket socket = new Socket(Constantes.HOST, puerto)) {
-            socket.setSoTimeout(Constantes.TIMEOUT_MS);
+    private int indicePrimario(List<Nodo> nodos) {
+        int mejor = 0;
+        int mejorId = Integer.MAX_VALUE;
+        for (int i = 0; i < nodos.size(); i++) {
+            Nodo n = nodos.get(i);
+            if (n.activo.get() && n.nodoId < mejorId) { mejor = i; mejorId = n.nodoId; }
+        }
+        return mejor;
+    }
 
-            PrintWriter   out = new PrintWriter(
-                    new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
-            BufferedReader in = new BufferedReader(
-                    new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-
+    private MensajeProtocolo reenviar(MensajeProtocolo req, Nodo nodo) throws Exception {
+        try (Socket socket = Transporte.conectar(nodo.host, nodo.puerto);
+             PrintWriter out = new PrintWriter(new OutputStreamWriter(
+                     socket.getOutputStream(), StandardCharsets.UTF_8), true);
+             BufferedReader in = new BufferedReader(new InputStreamReader(
+                     socket.getInputStream(), StandardCharsets.UTF_8))) {
             out.println(req.toJson());
-            String linea = in.readLine();
-            return linea != null ? MensajeProtocolo.fromJson(linea) : null;
+            String linea = LineaJson.leer(in);
+            if (linea == null) throw new java.io.EOFException("Respuesta vacia");
+            return MensajeProtocolo.fromJson(linea);
         }
     }
 
-    // ── Health Check (hilo daemon) ────────────────────────────────────────────
-
-    /**
-     * Cada HEALTH_INTERVAL_MS envía HEALTH_CHECK a cada nodo.
-     * Si no responde → nodo marcado inactivo (failover automático).
-     * Si responde → nodo marcado activo (auto-recuperación).
-     *
-     * Itera las listas VIVAS (no una copia estática) para que los nodos
-     * registrados dinámicamente también sean monitoreados.
-     */
     private void iniciarHealthCheck() {
         Thread hc = new Thread(() -> {
-            MensajeProtocolo ping = MensajeProtocolo.request(Constantes.HEALTH_CHECK, null);
-            while (true) {
-                // Esperar primero; los nodos arrancan como activos y se marcan caídos
-                // solo DESPUÉS de la primera ronda, evitando falsos negativos al inicio.
+            while (!Thread.currentThread().isInterrupted()) {
                 try { Thread.sleep(Constantes.HEALTH_INTERVAL_MS); }
                 catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
-
-                // Iterar sobre las listas vivas: CopyOnWriteArrayList garantiza
-                // iteración segura aunque procesarRegistro() agregue nodos en paralelo.
-                List<List<Nodo>> clusters = List.of(clusterSesiones, clusterJuegos, clusterMensajeria);
-                for (List<Nodo> cluster : clusters) {
-                    for (Nodo nodo : cluster) {
-                        boolean ok = false;
-                        try {
-                            MensajeProtocolo resp = reenviar(ping, nodo.puerto);
-                            ok = resp != null && resp.isOk();
-                        } catch (Exception ignored) {}
-
-                        if (nodo.activo.get() != ok) {
-                            nodo.activo.set(ok);
-                            long t = relojLamport.tick();
-                            LOG.info("[HEALTH] Nodo " + nodo.nombre + (ok ? " ACTIVO" : " CAÍDO"));
-                            LOG.info("[MEMBRESIA] t=" + t + " Nodo " + nodo.nombre
-                                    + (ok ? " JOINED" : " LEFT"));
-                            EstadoNodo estado = new EstadoNodo(
-                                    nodo.puerto, Constantes.HOST, nodo.puerto, 0, 0, t);
-                            estado.activo = ok;
-                            if (ok) membresia.registrar(estado);
-                            else    membresia.marcarCaido(nodo.puerto);
-                        }
-                    }
+                for (List<Nodo> cluster : List.of(clusterSesiones, clusterJuegos, clusterMensajeria)) {
+                    for (Nodo nodo : cluster) verificarNodo(nodo);
                 }
             }
-        }, "health-check");
+        }, "health-check-" + nombre);
         hc.setDaemon(true);
         hc.start();
-        LOG.info("[HEALTH] Health Check iniciado (intervalo " +
-                Constantes.HEALTH_INTERVAL_MS / 1000 + "s)");
+    }
+
+    private void verificarNodo(Nodo nodo) {
+        boolean ok = false;
+        try {
+            MensajeProtocolo ping = MensajeProtocolo.request(Constantes.HEALTH_CHECK, null);
+            ping.setEmisor(nombre);
+            ping.setReceptor(nodo.nombre);
+            ping.setLamportClock(reloj.tick());
+            MensajeProtocolo resp = reenviar(ping, nodo);
+            reloj.update(resp.getLamportClock());
+            ok = resp.isOk();
+        } catch (Exception ignored) {}
+        boolean anterior = nodo.activo.getAndSet(ok);
+        if (ok) registrarMembresia(nodo, reloj.tick());
+        else membresia.marcarCaido(nodo.id);
+        if (anterior != ok) LOG.info("[HEALTH] " + nodo.nombre + (ok ? " ACTIVO" : " CAIDO"));
+    }
+
+    private Nodo agregarSiAusente(Nodo candidato) {
+        List<Nodo> lista = obtenerCluster(candidato.cluster);
+        Nodo existente = lista.stream().filter(n -> n.id.equals(candidato.id)).findFirst().orElse(null);
+        if (existente != null) return existente;
+        lista.add(candidato);
+        return candidato;
+    }
+
+    private void registrarMembresia(Nodo n, long lamport) {
+        membresia.registrar(new EstadoNodo(n.id, n.cluster, n.nombre, n.host, n.puerto,
+                n.puertoBully, n.puertoMutex, n.puertoReplicacion, lamport));
+    }
+
+    private List<Nodo> obtenerCluster(String cluster) {
+        if (cluster == null) return null;
+        return switch (cluster) {
+            case "SESIONES" -> clusterSesiones;
+            case "JUEGOS" -> clusterJuegos;
+            case "MENSAJERIA" -> clusterMensajeria;
+            default -> null;
+        };
+    }
+
+    private AtomicInteger contador(String cluster) {
+        return switch (cluster) {
+            case "SESIONES" -> rrSesiones;
+            case "JUEGOS" -> rrJuegos;
+            default -> rrMensajeria;
+        };
+    }
+
+    private static MensajeProtocolo error(String requestId, String codigo, String mensaje) {
+        return MensajeProtocolo.error(requestId, mensaje).setCodigoErrorFluent(codigo);
     }
 }

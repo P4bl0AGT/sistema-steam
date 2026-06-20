@@ -1,11 +1,11 @@
 @echo off
-echo === Compilando Sistema Steam ===
+title Build y pruebas - Sistema Steam
 cd /d "%~dp0\.."
-call mvn clean package -q
-if %ERRORLEVEL% NEQ 0 (
-    echo [ERROR] Compilacion fallida.
+powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\1_build.ps1"
+if errorlevel 1 (
+    echo [ERROR] Build fallido.
     pause
     exit /b 1
 )
-echo [OK] Build exitoso. JARs en target/
+echo [OK] Build y pruebas de componentes completados.
 pause

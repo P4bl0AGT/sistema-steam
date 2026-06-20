@@ -1,6 +1,7 @@
 package com.steam.coordinacion;
 
 import com.google.gson.Gson;
+import com.steam.common.SeguridadMensajes;
 
 /**
  * Mensaje del protocolo Bully intercambiado entre nodos de svJuegos
@@ -23,6 +24,7 @@ public class MensajeBully {
     public int    emisorId;
     public int    coordinadorId; // relevante solo en COORDINATOR
     public long   lamportClock;
+    public String firma;
 
     public MensajeBully() {}
 
@@ -34,6 +36,18 @@ public class MensajeBully {
     }
 
     private static final Gson GSON = new Gson();
+
+    public void firmar() {
+        firma = SeguridadMensajes.firmarTexto(baseFirma());
+    }
+
+    public boolean firmaValida() {
+        return SeguridadMensajes.validarTexto(baseFirma(), firma);
+    }
+
+    private String baseFirma() {
+        return tipo + "|" + emisorId + "|" + coordinadorId + "|" + lamportClock;
+    }
 
     public String toJson()                           { return GSON.toJson(this); }
     public static MensajeBully fromJson(String json) { return GSON.fromJson(json, MensajeBully.class); }

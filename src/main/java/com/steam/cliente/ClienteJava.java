@@ -3,6 +3,9 @@ package com.steam.cliente;
 import com.steam.common.Constantes;
 import com.steam.common.MensajeProtocolo;
 import com.steam.common.RelojLamport;
+import com.steam.common.ClienteProxy;
+import com.steam.common.Configuracion;
+import com.steam.common.ExcepcionTransporte;
 
 import java.io.*;
 import java.net.*;
@@ -42,7 +45,7 @@ public class ClienteJava {
         System.out.println("╔══════════════════════════════════════╗");
         System.out.println("║       SISTEMA STEAM DISTRIBUIDO      ║");
         System.out.println("╚══════════════════════════════════════╝");
-        System.out.println("Proxy: " + Constantes.HOST + ":" + Constantes.PUERTO_PROXY);
+        System.out.println("Proxies: " + Configuracion.proxies());
 
         while (true) {
             if (token == null) menuSinSesion();
@@ -551,28 +554,11 @@ public class ClienteJava {
 
     private static MensajeProtocolo enviar(MensajeProtocolo req) {
         // Evento de envío: estampar reloj Lamport antes de enviar
-        req.setLamportClock(reloj.tick());
-        try (Socket socket = new Socket(Constantes.HOST, Constantes.PUERTO_PROXY)) {
-            socket.setSoTimeout(Constantes.TIMEOUT_MS);
-            PrintWriter   out = new PrintWriter(
-                    new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
-            BufferedReader in = new BufferedReader(
-                    new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-            out.println(req.toJson());
-            String respJson = in.readLine();
-            if (respJson != null) {
-                MensajeProtocolo resp = MensajeProtocolo.fromJson(respJson);
-                // Evento de recepción: actualizar reloj
-                if (resp != null) reloj.update(resp.getLamportClock());
-                return resp;
-            }
-            return null;
-        } catch (ConnectException e) {
-            System.out.println("[RED] No se puede conectar al Proxy. ¿Está iniciado?");
-        } catch (SocketTimeoutException e) {
-            System.out.println("[RED] Timeout: el servidor no respondió a tiempo.");
-        } catch (IOException e) {
-            System.out.println("[RED] Error de red: " + e.getMessage());
+        req.setEmisor("ClienteJava");
+        try {
+            return ClienteProxy.enviar(req, reloj, "ClienteJava");
+        } catch (ExcepcionTransporte e) {
+            System.out.println("[RED] " + e.getTipo() + ": " + e.getMessage());
         }
         return null;
     }

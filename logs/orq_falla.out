@@ -1,7 +1,0 @@
-[FALLA] Esperando 30s antes de inducir falla...
-[FALLA] Coordinador encontrado en puerto 8282
-[FALLA] Enviando SHUTDOWN_GRACEFUL al coordinador (puerto 8282)
-[FALLA] Respuesta: Cerrando nodo-2
-[FALLA] Señal enviada. El otro nodo debería iniciar re-elección en ~5s.
-[FALLA] Midiendo recuperación: sondeando nodo sobreviviente (puerto 8082)...
-[FALLA] >>> RECUPERACIÓN COMPLETA en 6935 ms | nuevo coordinador: nodo en puerto 8082

@@ -1,118 +1,84 @@
 package com.steam.carga;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.steam.common.ClienteProxy;
 import com.steam.common.Constantes;
+import com.steam.common.Endpoint;
 import com.steam.common.MensajeProtocolo;
+import com.steam.common.SeguridadMensajes;
 
-import java.io.*;
-import java.net.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-/**
- * FallaInducida – Simula la caída del nodo coordinador durante una prueba de carga.
- *
- * Uso: java ... FallaInducida
- *
- * Espera 30 segundos, luego:
- *  1. Pregunta a cada nodo de svJuegos quién es el coordinador.
- *  2. Envía SHUTDOWN_GRACEFUL al coordinador.
- *  3. El nodo coordinador registra el evento y llama System.exit(0).
- *  4. El otro nodo detecta la caída vía heartbeat y lanza re-elección.
- */
-public class FallaInducida {
+/** Derriba de forma autenticada al coordinador y mide la reeleccion Bully. */
+public final class FallaInducida {
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     public static void main(String[] args) throws Exception {
-        int espera = args.length > 0 ? Integer.parseInt(args[0]) : 30;
+        int espera = args.length > 0 ? Integer.parseInt(args[0]) : 0;
+        Path salida = args.length > 1 ? Path.of(args[1]) : Path.of("evidencia", "falla-coordinador.json");
+        if (espera > 0) Thread.sleep(espera * 1_000L);
+        int coordinador = encontrarCoordinador();
+        if (coordinador < 1) throw new IllegalStateException("No se pudo determinar coordinador");
+        int puertoCaido = coordinador == 1 ? Constantes.PUERTO_JUE_1 : Constantes.PUERTO_JUE_2;
+        int sobreviviente = coordinador == 1 ? 2 : 1;
+        int puertoSobreviviente = sobreviviente == 1 ? Constantes.PUERTO_JUE_1 : Constantes.PUERTO_JUE_2;
 
-        System.out.println("[FALLA] Esperando " + espera + "s antes de inducir falla...");
-        Thread.sleep(espera * 1_000L);
+        long inicio = System.currentTimeMillis();
+        MensajeProtocolo shutdown = MensajeProtocolo.request(Constantes.SHUTDOWN_GRACEFUL, null);
+        shutdown.setLamportClock(1L);
+        SeguridadMensajes.firmarControl(shutdown);
+        MensajeProtocolo ack = enviar(shutdown, puertoCaido);
+        if (ack == null || !ack.isOk()) throw new IllegalStateException("Apagado no autorizado o sin ACK");
 
-        int coordPuerto = encontrarCoordinador();
-        if (coordPuerto <= 0) {
-            System.out.println("[FALLA] No se pudo determinar el coordinador. ¿Están los nodos activos?");
-            return;
-        }
-
-        System.out.println("[FALLA] Enviando SHUTDOWN_GRACEFUL al coordinador (puerto " + coordPuerto + ")");
-        enviarShutdown(coordPuerto);
-        System.out.println("[FALLA] Señal enviada. El otro nodo debería iniciar re-elección en ~"
-                + (Constantes.HEARTBEAT_COORD_MS / 1_000) + "s.");
-
-        medirRecuperacion(coordPuerto);
-    }
-
-    /**
-     * Mide el TIEMPO DE RECUPERACIÓN (rúbrica 3.3): desde que se derriba al
-     * coordinador hasta que el nodo sobreviviente se proclama nuevo coordinador.
-     * Sondea QUIEN_ES_COORDINADOR cada 200 ms (máximo 30 s).
-     */
-    private static void medirRecuperacion(int coordPuertoCaido) {
-        int survivor = (coordPuertoCaido == Constantes.PUERTO_JUE_1)
-                ? Constantes.PUERTO_JUE_2 : Constantes.PUERTO_JUE_1;
-
-        long t0       = System.currentTimeMillis();
-        long deadline = t0 + 30_000;
-        System.out.println("[FALLA] Midiendo recuperación: sondeando nodo sobreviviente (puerto "
-                + survivor + ")...");
-
-        while (System.currentTimeMillis() < deadline) {
-            MensajeProtocolo r = enviar(
-                    MensajeProtocolo.request(Constantes.QUIEN_ES_COORDINADOR, null), survivor);
-            if (r != null && r.isOk() && Boolean.TRUE.equals(r.get("soyCoordinador"))) {
-                long ms = System.currentTimeMillis() - t0;
-                System.out.println("[FALLA] >>> RECUPERACIÓN COMPLETA en " + ms + " ms"
-                        + " | nuevo coordinador: nodo en puerto " + survivor);
-                return;
-            }
-            try { Thread.sleep(200); } catch (InterruptedException e) {
-                Thread.currentThread().interrupt(); return;
+        boolean recuperado = false;
+        int nuevoCoordinador = -1;
+        long limite = inicio + 30_000L;
+        while (System.currentTimeMillis() < limite) {
+            Thread.sleep(200L);
+            MensajeProtocolo estado = enviar(
+                    MensajeProtocolo.request(Constantes.QUIEN_ES_COORDINADOR, null), puertoSobreviviente);
+            if (estado != null && estado.isOk() && Boolean.TRUE.equals(estado.get("soyCoordinador"))) {
+                recuperado = true;
+                nuevoCoordinador = ((Number) estado.get("coordinadorActual")).intValue();
+                break;
             }
         }
-        System.out.println("[FALLA] No se detectó reelección dentro de 30 s "
-                + "(¿el nodo sobreviviente también cayó?).");
+        long recuperacionMs = System.currentTimeMillis() - inicio;
+        Map<String, Object> evidencia = new LinkedHashMap<>();
+        evidencia.put("fechaUtc", Instant.now().toString());
+        evidencia.put("coordinadorCaido", coordinador);
+        evidencia.put("puertoCaido", puertoCaido);
+        evidencia.put("nodoSobreviviente", sobreviviente);
+        evidencia.put("recuperado", recuperado);
+        evidencia.put("nuevoCoordinador", nuevoCoordinador);
+        evidencia.put("recuperacionMs", recuperacionMs);
+        Files.createDirectories(salida.toAbsolutePath().getParent());
+        Files.writeString(salida, GSON.toJson(evidencia), StandardCharsets.UTF_8);
+        System.out.println(GSON.toJson(evidencia));
+        if (!recuperado) throw new IllegalStateException("Bully no recupero coordinador en 30s");
     }
 
-    /** Consulta QUIEN_ES_COORDINADOR a ambos nodos y retorna el puerto del coordinador. */
     private static int encontrarCoordinador() {
-        int[] puertos = { Constantes.PUERTO_JUE_1, Constantes.PUERTO_JUE_2 };
-        for (int puerto : puertos) {
-            try {
-                MensajeProtocolo req  = MensajeProtocolo.request(Constantes.QUIEN_ES_COORDINADOR, null);
-                MensajeProtocolo resp = enviar(req, puerto);
-                if (resp != null && resp.isOk()) {
-                    boolean esCoor = Boolean.TRUE.equals(resp.get("soyCoordinador"));
-                    if (esCoor) {
-                        System.out.println("[FALLA] Coordinador encontrado en puerto " + puerto);
-                        return puerto;
-                    }
-                }
-            } catch (Exception ignored) {}
+        for (int nodo = 1; nodo <= 2; nodo++) {
+            int port = nodo == 1 ? Constantes.PUERTO_JUE_1 : Constantes.PUERTO_JUE_2;
+            MensajeProtocolo resp = enviar(
+                    MensajeProtocolo.request(Constantes.QUIEN_ES_COORDINADOR, null), port);
+            if (resp != null && resp.isOk() && Boolean.TRUE.equals(resp.get("soyCoordinador"))) return nodo;
         }
         return -1;
     }
 
-    private static void enviarShutdown(int puerto) {
-        try {
-            MensajeProtocolo req  = MensajeProtocolo.request(Constantes.SHUTDOWN_GRACEFUL, null);
-            MensajeProtocolo resp = enviar(req, puerto);
-            if (resp != null) System.out.println("[FALLA] Respuesta: " + resp.getMensaje());
-        } catch (Exception e) {
-            // El nodo puede cerrarse antes de enviar respuesta — es normal
-            System.out.println("[FALLA] Nodo cerrado (conexión cortada): esperado.");
-        }
-    }
-
     private static MensajeProtocolo enviar(MensajeProtocolo req, int puerto) {
-        try (Socket socket = new Socket(Constantes.HOST, puerto)) {
-            socket.setSoTimeout(Constantes.TIMEOUT_MS);
-            PrintWriter   out = new PrintWriter(
-                    new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
-            BufferedReader in  = new BufferedReader(
-                    new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-            out.println(req.toJson());
-            String resp = in.readLine();
-            return resp != null ? MensajeProtocolo.fromJson(resp) : null;
-        } catch (IOException e) {
-            return null;
-        }
+        try {
+            req.setEmisor("FallaInducida");
+            if (req.getLamportClock() == 0L) req.setLamportClock(1L);
+            return ClienteProxy.enviarA(req, new Endpoint("localhost", puerto));
+        } catch (Exception e) { return null; }
     }
 }

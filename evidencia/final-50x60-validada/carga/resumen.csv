@@ -1,0 +1,2 @@
+hilos,duracionSeg,intentos,exitos,erroresNegocio,perdidasTransporte,tasaPerdidaPct,throughputExitosSeg,latenciaPromedioMs,latenciaP95Ms,mensajesCoordinacion
+50,60,13423,13417,6,0,0.0000,223.6167,225.7244,1312.1170,522

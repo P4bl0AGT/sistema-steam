@@ -1,321 +1,235 @@
 package com.steam.carga;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.steam.common.ClienteProxy;
 import com.steam.common.Constantes;
+import com.steam.common.Endpoint;
 import com.steam.common.MensajeProtocolo;
 import com.steam.common.RelojLamport;
 
-import java.io.*;
-import java.net.*;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLongArray;
+import java.util.concurrent.atomic.LongAdder;
 
-/**
- * GeneradorCarga – Prueba de carga para el Sistema Steam Distribuido.
- *
- * Uso: java ... GeneradorCarga [hilos=50] [duracionSeg=60]
- *
- * Cada hilo simula un ciclo completo de usuario:
- *   LOGIN → LISTAR_JUEGOS → COMPRAR_JUEGO → CONFIRMAR_PAGO →
- *   ENVIAR_MENSAJE → LOGOUT
- *
- * Métricas (thread-safe con AtomicLong):
- *  totalPeticiones, peticionesExitosas, peticionesError,
- *  sumaLatenciasMs, todasLatencias (para p95).
- *
- * Reporte parcial cada 10 s; reporte final + guardado en logs/.
- */
-public class GeneradorCarga {
+/** Carga concurrente reproducible con metricas separadas por categoria. */
+public final class GeneradorCarga {
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final DateTimeFormatter ID = DateTimeFormatter
+            .ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
 
-    // ── Métricas ──────────────────────────────────────────────────────────────
-    // Distinguimos tres resultados por petición de red:
-    //   - respuestasOk      : el servidor respondió OK (transacción aceptada)
-    //   - respuestasRechazo : el servidor respondió ERROR de NEGOCIO (p.ej. "ya posees
-    //                         el juego"). El sistema está vivo: NO es una pérdida.
-    //   - perdidas          : timeout / sin respuesta / conexión rechazada. ESTA es la
-    //                         "tasa de pérdida" que se dispara al caer un nodo (rúbrica 3.2).
-    private static final AtomicLong totalPeticiones   = new AtomicLong(0);
-    private static final AtomicLong respuestasOk      = new AtomicLong(0);
-    private static final AtomicLong respuestasRechazo = new AtomicLong(0);
-    private static final AtomicLong perdidas          = new AtomicLong(0);
-    private static final AtomicLong sumaLatenciasMs   = new AtomicLong(0); // solo de respuestas servidas
-    private static final CopyOnWriteArrayList<Long> todasLatencias = new CopyOnWriteArrayList<>();
+    private final int hilos;
+    private final int duracionSeg;
+    private final Path salida;
+    private final LongAdder intentos = new LongAdder();
+    private final LongAdder exitos = new LongAdder();
+    private final LongAdder erroresNegocio = new LongAdder();
+    private final LongAdder perdidasTransporte = new LongAdder();
+    private final Map<String, LongAdder> porOperacion = new ConcurrentHashMap<>();
+    private final ConcurrentLinkedQueue<Long> latenciasMicros = new ConcurrentLinkedQueue<>();
+    private final AtomicLongArray completadasPorSegundo;
+    private volatile long inicioNanos;
 
-    private static final RelojLamport reloj = new RelojLamport();
-    private static final Logger       LOG   = Logger.getLogger(GeneradorCarga.class.getName());
-
-    private static final String   PASS = "pass123";
-
-    // ── main ─────────────────────────────────────────────────────────────────
+    private GeneradorCarga(int hilos, int duracionSeg, Path salida) {
+        this.hilos = hilos;
+        this.duracionSeg = duracionSeg;
+        this.salida = salida;
+        this.completadasPorSegundo = new AtomicLongArray(duracionSeg + 2);
+    }
 
     public static void main(String[] args) throws Exception {
-        int hilos       = args.length > 0 ? Integer.parseInt(args[0]) : 50;
-        int duracionSeg = args.length > 1 ? Integer.parseInt(args[1]) : 60;
+        int hilos = args.length > 0 ? Integer.parseInt(args[0]) : 50;
+        int duracion = args.length > 1 ? Integer.parseInt(args[1]) : 60;
+        Path salida = args.length > 2 ? Path.of(args[2])
+                : Path.of("evidencia", "carga", ID.format(Instant.now()));
+        if (hilos < 1 || hilos > 500 || duracion < 1) throw new IllegalArgumentException("Parametros invalidos");
+        new GeneradorCarga(hilos, duracion, salida).ejecutar();
+    }
 
-        // Configurar log a archivo
-        String timestamp = String.valueOf(System.currentTimeMillis());
-        String logFile   = "logs/carga_" + timestamp + ".log";
-        configurarLog(logFile);
-
-        System.out.println("[CARGA] Iniciando: " + hilos + " hilos, " + duracionSeg + "s");
-        System.out.println("[CARGA] Log: " + logFile);
-
-        long inicio = System.currentTimeMillis();
-        long finMs  = inicio + duracionSeg * 1_000L;
-
+    private void ejecutar() throws Exception {
+        Files.createDirectories(salida);
+        List<String> juegos = obtenerJuegos();
         ExecutorService pool = Executors.newFixedThreadPool(hilos);
-        for (int i = 0; i < hilos; i++) {
-            final int idx = i;   // identidad fija del hilo → usuario propio
-            pool.submit(() -> cicloWorker(finMs, idx));
+        CountDownLatch listos = new CountDownLatch(hilos);
+        CountDownLatch inicio = new CountDownLatch(1);
+        for (int i = 1; i <= hilos; i++) {
+            int usuario = i;
+            pool.submit(() -> trabajador(usuario, juegos, listos, inicio));
         }
-
-        // Hilo de reporte parcial cada 10 s
-        Thread reporter = new Thread(() -> {
-            long lastTime  = inicio;
-            long lastTotal = 0;
-            while (System.currentTimeMillis() < finMs) {
-                try { Thread.sleep(10_000); } catch (InterruptedException e) { break; }
-                long now    = System.currentTimeMillis();
-                long elap   = (now - inicio)    / 1_000;
-                long inter  = (now - lastTime)  / 1_000;
-                long total  = totalPeticiones.get();
-                long tp     = inter > 0 ? (total - lastTotal) / inter : 0;
-                long serv   = respuestasOk.get() + respuestasRechazo.get();
-                double avg  = serv > 0 ? (double) sumaLatenciasMs.get() / serv : 0;
-                String msg  = String.format("[CARGA] t=%ds | throughput=%d req/s | latAvg=%.1fms | perdidas=%d",
-                        elap, tp, avg, perdidas.get());
-                System.out.println(msg);
-                LOG.info(msg);
-                lastTime  = now;
-                lastTotal = total;
-            }
-        }, "reporter");
-        reporter.setDaemon(true);
-        reporter.start();
-
+        if (!listos.await(60, TimeUnit.SECONDS)) throw new IllegalStateException("Timeout preparando clientes");
+        inicioNanos = System.nanoTime();
+        inicio.countDown();
         pool.shutdown();
-        pool.awaitTermination(duracionSeg + 15, TimeUnit.SECONDS);
-        pool.shutdownNow();
-
-        imprimirReporteFinal(duracionSeg, logFile);
+        if (!pool.awaitTermination(duracionSeg + 45L, TimeUnit.SECONDS)) {
+            pool.shutdownNow();
+            throw new IllegalStateException("La carga no termino");
+        }
+        escribirReporte();
     }
 
-    // ── Worker ────────────────────────────────────────────────────────────────
-
-    private static void cicloWorker(long finMs, int idx) {
-        Random rand = new Random();
-        // Usuario propio del hilo (cliente1..clienteN). Receptor de mensajes = el siguiente.
-        int    n    = Constantes.NUM_COMPRADORES;
-        String user = "cliente" + ((idx % n) + 1);
-        String otro = "cliente" + (((idx + 1) % n) + 1);
-        while (System.currentTimeMillis() < finMs
-                && !Thread.currentThread().isInterrupted()) {
-            try {
-                // a) LOGIN
-                String token = op(() -> {
-                    MensajeProtocolo req = MensajeProtocolo.request(Constantes.LOGIN, null);
-                    req.put("username", user);
-                    req.put("password", PASS);
-                    MensajeProtocolo resp = enviar(req);
-                    return (resp != null && resp.isOk()) ? resp.getString("token") : null;
-                });
-                if (token == null) continue; // login falló (ya contabilizado en enviar)
-
-                // b) LISTAR_JUEGOS
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> juegos = op(() -> {
-                    MensajeProtocolo resp = enviar(MensajeProtocolo.request(Constantes.LISTAR_JUEGOS, token));
-                    if (resp == null || !resp.isOk()) return null;
-                    return (List<Map<String, Object>>) resp.get("juegos");
-                });
-
-                // c) COMPRAR un juego al azar (reparte la contención sobre el catálogo)
-                String reservaId = null;
-                if (juegos != null && !juegos.isEmpty()) {
-                    String juegoId = juegos.get(rand.nextInt(juegos.size())).get("id").toString();
-                    reservaId = op(() -> {
-                        MensajeProtocolo req = MensajeProtocolo.request(Constantes.COMPRAR_JUEGO, token);
-                        req.put("juegoId", juegoId);
-                        MensajeProtocolo resp = enviar(req);
-                        return (resp != null && resp.isOk()) ? resp.getString("reservaId") : null;
-                    });
-                }
-
-                // d) CONFIRMAR_PAGO
-                if (reservaId != null) {
-                    String rid = reservaId;
-                    op(() -> {
-                        MensajeProtocolo req = MensajeProtocolo.request(Constantes.CONFIRMAR_PAGO, token);
-                        req.put("reservaId", rid);
-                        MensajeProtocolo resp = enviar(req);
-                        return (resp != null && resp.isOk()) ? "ok" : null;
-                    });
-                }
-
-                // e) ENVIAR_MENSAJE al otro usuario
-                op(() -> {
-                    MensajeProtocolo req = MensajeProtocolo.request(Constantes.ENVIAR_MENSAJE, token);
-                    req.put("receptor",  otro);
-                    req.put("contenido", "Carga t=" + System.currentTimeMillis());
-                    MensajeProtocolo resp = enviar(req);
-                    return (resp != null && resp.isOk()) ? "ok" : null;
-                });
-
-                // f) LOGOUT
-                op(() -> {
-                    MensajeProtocolo resp = enviar(MensajeProtocolo.request(Constantes.LOGOUT, token));
-                    return (resp != null && resp.isOk()) ? "ok" : null;
-                });
-
-            } catch (Exception e) {
-                // Excepción inesperada del worker (no es una petición de red en sí).
+    private void trabajador(int numero, List<String> juegos, CountDownLatch listos, CountDownLatch inicio) {
+        RelojLamport reloj = new RelojLamport("carga-" + numero);
+        String token = login(numero, reloj);
+        Set<String> comprasIntentadas = ConcurrentHashMap.newKeySet();
+        listos.countDown();
+        try { inicio.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return; }
+        long fin = inicioNanos + TimeUnit.SECONDS.toNanos(duracionSeg);
+        while (System.nanoTime() < fin && !Thread.currentThread().isInterrupted()) {
+            int opcion = ThreadLocalRandom.current().nextInt(100);
+            MensajeProtocolo req;
+            if (opcion < 50 || token == null) {
+                req = MensajeProtocolo.request(Constantes.LISTAR_JUEGOS, token);
+            } else if (opcion < 70) {
+                req = MensajeProtocolo.request(Constantes.VER_SALDO, token);
+            } else if (opcion < 82) {
+                req = MensajeProtocolo.request(Constantes.VER_MENSAJES, token);
+            } else if (opcion < 95) {
+                int receptor = numero == hilos ? 1 : numero + 1;
+                req = MensajeProtocolo.request(Constantes.ENVIAR_MENSAJE, token)
+                        .put("receptor", "cliente" + receptor)
+                        .put("contenido", "carga-" + numero + "-" + System.nanoTime());
+            } else {
+                String juego = juegos.stream().filter(comprasIntentadas::add).findFirst().orElse(null);
+                req = juego == null ? MensajeProtocolo.request(Constantes.LISTAR_JUEGOS, token)
+                        : MensajeProtocolo.request(Constantes.COMPRAR_JUEGO, token).put("juegoId", juego);
             }
+            medir(req, reloj, "carga-" + numero);
         }
     }
 
-    // ── Helper de control de flujo ────────────────────────────────────────────
-    // Las métricas se capturan dentro de enviar() (una por round-trip de red).
-    // op() solo ejecuta el paso y absorbe excepciones para no cortar el ciclo.
-
-    @FunctionalInterface
-    interface Operacion<T> { T ejecutar() throws Exception; }
-
-    private static <T> T op(Operacion<T> o) {
-        try { return o.ejecutar(); }
-        catch (Exception e) { return null; }
-    }
-
-    // ── Transporte ────────────────────────────────────────────────────────────
-
-    private static MensajeProtocolo enviar(MensajeProtocolo req) {
-        req.setLamportClock(reloj.tick());
-        long t0 = System.currentTimeMillis();
-        totalPeticiones.incrementAndGet();
-        try (Socket socket = new Socket(Constantes.HOST, Constantes.PUERTO_PROXY)) {
-            socket.setSoTimeout(Constantes.TIMEOUT_MS);
-            PrintWriter   out = new PrintWriter(
-                    new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
-            BufferedReader in = new BufferedReader(
-                    new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-            out.println(req.toJson());
-            String resp = in.readLine();
-            if (resp != null) {
-                // Hubo respuesta → petición servida; registramos su latencia.
-                long lat = System.currentTimeMillis() - t0;
-                sumaLatenciasMs.addAndGet(lat);
-                todasLatencias.add(lat);
-                MensajeProtocolo m = MensajeProtocolo.fromJson(resp);
-                if (m != null) {
-                    reloj.update(m.getLamportClock());
-                    if (m.isOk()) respuestasOk.incrementAndGet();
-                    else          respuestasRechazo.incrementAndGet(); // ERROR de negocio, sistema vivo
-                    return m;
-                }
-            }
-            // resp == null o JSON corrupto → no llegó respuesta útil = pérdida
-            perdidas.incrementAndGet();
-        } catch (IOException e) {
-            // Timeout / conexión rechazada (típico al caer un nodo) = pérdida real
-            perdidas.incrementAndGet();
-        }
-        return null;
-    }
-
-    // ── Reporte ───────────────────────────────────────────────────────────────
-
-    private static void imprimirReporteFinal(int duracionSeg, String logFile) {
-        long total    = totalPeticiones.get();
-        long ok       = respuestasOk.get();
-        long rechazo  = respuestasRechazo.get();
-        long perdida  = perdidas.get();
-        long servidas = ok + rechazo;
-        double tp     = total > 0    ? (double) total / duracionSeg : 0;
-        double avg    = servidas > 0 ? (double) sumaLatenciasMs.get() / servidas : 0;
-        double pctPer = total > 0    ? perdida * 100.0 / total : 0;
-
-        // Calcular p95 (sobre peticiones servidas)
-        List<Long> sorted = new ArrayList<>(todasLatencias);
-        Collections.sort(sorted);
-        long p95 = sorted.isEmpty() ? 0 : sorted.get((int) (sorted.size() * 0.95));
-
-        // Mensajes de coordinación: consultar a cada nodo de svJuegos y sumar
-        long[] coord     = recolectarCoord();
-        long   msgBully  = coord[0];
-        long   msgMutex  = coord[1];
-        long   msgCoord  = msgBully + msgMutex;
-
-        String reporte = String.format("""
-                ══════════════════════════════════════
-                REPORTE FINAL DE CARGA
-                ══════════════════════════════════════
-                Duración           : %ds
-                Total peticiones   : %d
-                Throughput         : %.1f req/s
-                Latencia promedio  : %.1f ms
-                Latencia p95       : %d ms
-                Respuestas OK      : %d
-                Rechazos de negocio: %d  (sistema vivo, no es pérdida)
-                Pérdidas (timeout) : %d  (%.1f%% — tasa de pérdida)
-                Msgs coordinación  : %d  (Bully=%d, Mutex=%d)
-                Log guardado en    : %s
-                ══════════════════════════════════════""",
-                duracionSeg, total, tp, avg, p95, ok, rechazo,
-                perdida, pctPer, msgCoord, msgBully, msgMutex, logFile);
-
-        System.out.println(reporte);
-        LOG.info(reporte);
-    }
-
-    /**
-     * Consulta VER_METRICAS_COORD a ambos nodos de svJuegos (directo, sin proxy)
-     * y suma los mensajes de coordinación emitidos. Retorna {totalBully, totalMutex}.
-     * Si un nodo está caído (p.ej. tras la falla inducida), se omite.
-     */
-    private static long[] recolectarCoord() {
-        long bully = 0, mutex = 0;
-        int[] puertos = { Constantes.PUERTO_JUE_1, Constantes.PUERTO_JUE_2 };
-        for (int puerto : puertos) {
-            MensajeProtocolo resp = enviarA(
-                    MensajeProtocolo.request(Constantes.VER_METRICAS_COORD, null), puerto);
-            if (resp != null && resp.isOk()) {
-                bully += (long) resp.getDouble("mensajesBully");
-                mutex += (long) resp.getDouble("mensajesMutex");
-            }
-        }
-        return new long[]{ bully, mutex };
-    }
-
-    /** Envía una petición a un puerto específico (sin pasar por el proxy). */
-    private static MensajeProtocolo enviarA(MensajeProtocolo req, int puerto) {
-        try (Socket socket = new Socket(Constantes.HOST, puerto)) {
-            socket.setSoTimeout(Constantes.TIMEOUT_MS);
-            PrintWriter   out = new PrintWriter(
-                    new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
-            BufferedReader in = new BufferedReader(
-                    new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-            out.println(req.toJson());
-            String resp = in.readLine();
-            return resp != null ? MensajeProtocolo.fromJson(resp) : null;
-        } catch (IOException e) {
-            return null;
-        }
-    }
-
-    // ── Configuración de logging ──────────────────────────────────────────────
-
-    private static void configurarLog(String logFile) {
+    private String login(int numero, RelojLamport reloj) {
         try {
-            Files.createDirectories(Path.of("logs"));
-            FileHandler fh = new FileHandler(logFile, true);
-            fh.setFormatter(new SimpleFormatter());
-            Logger root = Logger.getLogger("");
-            root.addHandler(fh);
-            root.setLevel(Level.INFO);
-        } catch (IOException e) {
-            System.err.println("[CARGA] No se pudo crear log: " + e.getMessage());
+            MensajeProtocolo req = MensajeProtocolo.request(Constantes.LOGIN, null)
+                    .put("username", "cliente" + numero).put("password", "pass123");
+            MensajeProtocolo resp = ClienteProxy.enviar(req, reloj, "carga-login-" + numero);
+            return resp.isOk() ? resp.getString("token") : null;
+        } catch (Exception e) { return null; }
+    }
+
+    private List<String> obtenerJuegos() throws Exception {
+        MensajeProtocolo resp = ClienteProxy.enviar(
+                MensajeProtocolo.request(Constantes.LISTAR_JUEGOS, null),
+                new RelojLamport("carga-setup"), "carga-setup");
+        List<String> ids = new ArrayList<>();
+        Object raw = resp.get("juegos");
+        if (raw instanceof List<?> lista) for (Object item : lista) {
+            if (item instanceof Map<?, ?> mapa && mapa.get("id") != null) ids.add(mapa.get("id").toString());
         }
+        if (ids.isEmpty()) throw new IllegalStateException("Catalogo vacio");
+        return List.copyOf(ids);
+    }
+
+    private void medir(MensajeProtocolo req, RelojLamport reloj, String emisor) {
+        intentos.increment();
+        long inicio = System.nanoTime();
+        try {
+            MensajeProtocolo resp = ClienteProxy.enviar(req, reloj, emisor);
+            if (resp.isOk()) exitos.increment(); else erroresNegocio.increment();
+            porOperacion.computeIfAbsent(req.getOperacion(), ignored -> new LongAdder()).increment();
+        } catch (Exception e) {
+            perdidasTransporte.increment();
+        } finally {
+            long micros = TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - inicio);
+            latenciasMicros.add(micros);
+            int segundo = (int) TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - inicioNanos);
+            if (segundo >= 0 && segundo < completadasPorSegundo.length()) completadasPorSegundo.incrementAndGet(segundo);
+        }
+    }
+
+    private void escribirReporte() throws Exception {
+        List<Long> latencias = new ArrayList<>(latenciasMicros);
+        latencias.sort(Comparator.naturalOrder());
+        double promedioMs = latencias.stream().mapToLong(Long::longValue).average().orElse(0.0) / 1_000.0;
+        double p95Ms = latencias.isEmpty() ? 0.0
+                : latencias.get(Math.min(latencias.size() - 1, (int) Math.ceil(latencias.size() * 0.95) - 1)) / 1_000.0;
+        long coordinacion = mensajesCoordinacion();
+        double perdidaPct = intentos.sum() == 0 ? 0.0 : 100.0 * perdidasTransporte.sum() / intentos.sum();
+
+        Map<String, Object> reporte = new LinkedHashMap<>();
+        reporte.put("fechaUtc", Instant.now().toString());
+        reporte.put("hilos", hilos);
+        reporte.put("duracionSeg", duracionSeg);
+        reporte.put("intentos", intentos.sum());
+        reporte.put("exitos", exitos.sum());
+        reporte.put("erroresNegocio", erroresNegocio.sum());
+        reporte.put("perdidasTransporte", perdidasTransporte.sum());
+        reporte.put("tasaPerdidaPct", perdidaPct);
+        reporte.put("throughputExitosSeg", exitos.sum() / (double) duracionSeg);
+        reporte.put("throughputCompletadasSeg", (exitos.sum() + erroresNegocio.sum()) / (double) duracionSeg);
+        reporte.put("latenciaPromedioMs", promedioMs);
+        reporte.put("latenciaP95Ms", p95Ms);
+        reporte.put("mensajesCoordinacion", coordinacion);
+        Map<String, Long> operaciones = new java.util.TreeMap<>();
+        porOperacion.forEach((k, v) -> operaciones.put(k, v.sum()));
+        reporte.put("operaciones", operaciones);
+        Files.writeString(salida.resolve("reporte-carga.json"), GSON.toJson(reporte), StandardCharsets.UTF_8);
+
+        String cabecera = "hilos,duracionSeg,intentos,exitos,erroresNegocio,perdidasTransporte,tasaPerdidaPct,throughputExitosSeg,latenciaPromedioMs,latenciaP95Ms,mensajesCoordinacion\n";
+        String fila = String.format(java.util.Locale.ROOT, "%d,%d,%d,%d,%d,%d,%.4f,%.4f,%.4f,%.4f,%d%n",
+                hilos, duracionSeg, intentos.sum(), exitos.sum(), erroresNegocio.sum(),
+                perdidasTransporte.sum(), perdidaPct, exitos.sum() / (double) duracionSeg,
+                promedioMs, p95Ms, coordinacion);
+        Files.writeString(salida.resolve("resumen.csv"), cabecera + fila, StandardCharsets.UTF_8);
+
+        StringBuilder serie = new StringBuilder("segundo,completadas\n");
+        for (int i = 0; i < duracionSeg; i++) serie.append(i + 1).append(',').append(completadasPorSegundo.get(i)).append('\n');
+        Files.writeString(salida.resolve("throughput-por-segundo.csv"), serie, StandardCharsets.UTF_8);
+        Files.writeString(salida.resolve("throughput.svg"), graficoSvg(), StandardCharsets.UTF_8);
+
+        System.out.printf(java.util.Locale.ROOT,
+                "OK CARGA hilos=%d duracion=%ds intentos=%d exitos=%d negocio=%d perdidas=%d perdida=%.3f%% throughput=%.2f/s promedio=%.2fms p95=%.2fms coord=%d%nEVIDENCIA=%s%n",
+                hilos, duracionSeg, intentos.sum(), exitos.sum(), erroresNegocio.sum(),
+                perdidasTransporte.sum(), perdidaPct, exitos.sum() / (double) duracionSeg,
+                promedioMs, p95Ms, coordinacion, salida.toAbsolutePath());
+    }
+
+    private long mensajesCoordinacion() {
+        long total = 0L;
+        for (Endpoint endpoint : List.of(new Endpoint("localhost", Constantes.PUERTO_JUE_1),
+                new Endpoint("localhost", Constantes.PUERTO_JUE_2))) {
+            try {
+                MensajeProtocolo req = MensajeProtocolo.request(Constantes.VER_METRICAS_COORD, null);
+                req.setLamportClock(1L);
+                MensajeProtocolo resp = ClienteProxy.enviarA(req, endpoint);
+                if (resp.isOk()) total += ((Number) resp.get("mensajesCoordinacion")).longValue();
+            } catch (Exception ignored) {}
+        }
+        return total;
+    }
+
+    private String graficoSvg() {
+        int ancho = 900, alto = 320, margen = 40;
+        long max = 1;
+        for (int i = 0; i < duracionSeg; i++) max = Math.max(max, completadasPorSegundo.get(i));
+        StringBuilder puntos = new StringBuilder();
+        for (int i = 0; i < duracionSeg; i++) {
+            double x = margen + i * (ancho - 2.0 * margen) / Math.max(1, duracionSeg - 1);
+            double y = alto - margen - completadasPorSegundo.get(i) * (alto - 2.0 * margen) / max;
+            puntos.append(String.format(java.util.Locale.ROOT, "%.1f,%.1f ", x, y));
+        }
+        return "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" + ancho + "\" height=\"" + alto + "\">"
+                + "<rect width=\"100%\" height=\"100%\" fill=\"white\"/><text x=\"40\" y=\"22\" font-family=\"sans-serif\" font-size=\"16\">Throughput por segundo</text>"
+                + "<line x1=\"40\" y1=\"280\" x2=\"860\" y2=\"280\" stroke=\"#333\"/><line x1=\"40\" y1=\"40\" x2=\"40\" y2=\"280\" stroke=\"#333\"/>"
+                + "<polyline fill=\"none\" stroke=\"#1769aa\" stroke-width=\"2\" points=\"" + puntos + "\"/>"
+                + "<text x=\"8\" y=\"45\" font-family=\"sans-serif\" font-size=\"12\">" + max + "</text>"
+                + "<text x=\"820\" y=\"305\" font-family=\"sans-serif\" font-size=\"12\">segundos</text></svg>";
     }
 }

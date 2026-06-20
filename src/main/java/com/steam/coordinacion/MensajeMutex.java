@@ -1,40 +1,47 @@
 package com.steam.coordinacion;
 
 import com.google.gson.Gson;
+import com.steam.common.SeguridadMensajes;
 
-/**
- * Mensaje del protocolo de Exclusión Mutua Centralizada.
- *
- * Tipos:
- *  REQUEST → nodo no-coordinador pide acceso al recurso
- *  GRANT   → coordinador otorga el acceso
- *  RELEASE → nodo no-coordinador libera el recurso
- */
+/** Mensaje autenticado del mutex centralizado con propiedad y lease. */
 public class MensajeMutex {
-
     public static final String REQUEST = "REQUEST";
-    public static final String GRANT   = "GRANT";
+    public static final String GRANT = "GRANT";
     public static final String RELEASE = "RELEASE";
+    public static final String RELEASED = "RELEASED";
+    public static final String TIMEOUT = "TIMEOUT";
+    public static final String REDIRECT = "REDIRECT";
+    public static final String DENIED = "DENIED";
 
     public String tipo;
-    public int    solicitanteId;
+    public int solicitanteId;
+    public int coordinadorId;
     public String recurso;
     public String requestId;
-    public long   lamportClock;
+    public long lamportClock;
+    public long leaseUntil;
+    public String firma;
 
     public MensajeMutex() {}
 
     public MensajeMutex(String tipo, int solicitanteId, String recurso,
                         String requestId, long lamportClock) {
-        this.tipo          = tipo;
+        this.tipo = tipo;
         this.solicitanteId = solicitanteId;
-        this.recurso       = recurso;
-        this.requestId     = requestId;
-        this.lamportClock  = lamportClock;
+        this.recurso = recurso;
+        this.requestId = requestId;
+        this.lamportClock = lamportClock;
+    }
+
+    public void firmar() { firma = SeguridadMensajes.firmarTexto(baseFirma()); }
+    public boolean firmaValida() { return SeguridadMensajes.validarTexto(baseFirma(), firma); }
+
+    private String baseFirma() {
+        return tipo + "|" + solicitanteId + "|" + coordinadorId + "|" + recurso + "|"
+                + requestId + "|" + lamportClock + "|" + leaseUntil;
     }
 
     private static final Gson GSON = new Gson();
-
-    public String toJson()                           { return GSON.toJson(this); }
+    public String toJson() { return GSON.toJson(this); }
     public static MensajeMutex fromJson(String json) { return GSON.fromJson(json, MensajeMutex.class); }
 }

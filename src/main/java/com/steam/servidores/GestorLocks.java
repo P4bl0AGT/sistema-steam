@@ -7,6 +7,8 @@ import com.steam.models.Juego;
 import com.steam.models.Reserva;
 
 import java.io.IOException;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 /**
@@ -31,10 +33,22 @@ public class GestorLocks implements Runnable {
 
     private final GestorPersistencia<BDJuegos> gp;
     private final Object                       lock;
+    private final BooleanSupplier              activo;
+    private final Consumer<BDJuegos>           guardador;
 
     public GestorLocks(GestorPersistencia<BDJuegos> gp, Object lock) {
+        this(gp, lock, () -> true, bd -> {
+            try { gp.guardar(bd); }
+            catch (IOException e) { throw new IllegalStateException(e); }
+        });
+    }
+
+    public GestorLocks(GestorPersistencia<BDJuegos> gp, Object lock,
+                       BooleanSupplier activo, Consumer<BDJuegos> guardador) {
         this.gp   = gp;
         this.lock = lock;
+        this.activo = activo;
+        this.guardador = guardador;
     }
 
     @Override
@@ -66,6 +80,7 @@ public class GestorLocks implements Runnable {
      * evitando condiciones de carrera sobre el stock.
      */
     private void liberarReservasExpiradas() {
+        if (!activo.getAsBoolean()) return;
         synchronized (lock) {
             BDJuegos bd = gp.leer();
             if (bd == null) return;
@@ -94,8 +109,8 @@ public class GestorLocks implements Runnable {
 
             if (cambios) {
                 try {
-                    gp.guardar(bd);  // replicación Main → Copy
-                } catch (IOException e) {
+                    guardador.accept(bd);
+                } catch (RuntimeException e) {
                     LOG.severe("[LOCKS] Error guardando tras liberar reservas: " + e.getMessage());
                 }
             }

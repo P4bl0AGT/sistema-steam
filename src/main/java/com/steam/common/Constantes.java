@@ -5,12 +5,21 @@ public final class Constantes {
     // ── Puertos ──────────────────────────────────────────────────────────────
     public static final String HOST             = "localhost";
     public static final int    PUERTO_PROXY     = 8080;
+    public static final int    PUERTO_PROXY_2   = 8085;
     public static final int    PUERTO_SES_1     = 8081;
     public static final int    PUERTO_SES_2     = 8181;
     public static final int    PUERTO_JUE_1     = 8082;
     public static final int    PUERTO_JUE_2     = 8282;
     public static final int    PUERTO_MSG_1     = 8083;
     public static final int    PUERTO_MSG_2     = 8383;
+
+    // Replicacion de estado por TCP (almacenamiento independiente por nodo)
+    public static final int    PUERTO_JUE_1_REPL = 9482;
+    public static final int    PUERTO_JUE_2_REPL = 9582;
+    public static final int    PUERTO_SES_1_REPL = 9483;
+    public static final int    PUERTO_SES_2_REPL = 9583;
+    public static final int    PUERTO_MSG_1_REPL = 9484;
+    public static final int    PUERTO_MSG_2_REPL = 9584;
 
     // ── Timeouts ─────────────────────────────────────────────────────────────
     public static final int  TIMEOUT_MS              = 5_000;
@@ -52,6 +61,9 @@ public final class Constantes {
     public static final String QUIEN_ES_COORDINADOR    = "QUIEN_ES_COORDINADOR";
     public static final String SHUTDOWN_GRACEFUL       = "SHUTDOWN_GRACEFUL";
     public static final String VER_METRICAS_COORD      = "VER_METRICAS_COORD";
+    public static final String SHUTDOWN_PROXY          = "SHUTDOWN_PROXY";
+    public static final String ESTADO_MEMBRESIA        = "ESTADO_MEMBRESIA";
+    public static final String ESTADO_REPLICACION      = "ESTADO_REPLICACION";
 
     // ── Registro dinámico en Proxy ────────────────────────────────────────────
     public static final String REGISTRAR_NODO          = "REGISTRAR_NODO";

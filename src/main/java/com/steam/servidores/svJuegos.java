@@ -43,13 +43,15 @@ import java.util.stream.Collectors;
  */
 public class svJuegos {
 
-    private static final Logger      LOG          = Logger.getLogger(svJuegos.class.getName());
+    private static final Logger LOG = Logger.getLogger(svJuegos.class.getName());
     /** Reloj de Lamport compartido por todos los hilos de esta instancia. */
-    private static final RelojLamport relojLamport = new RelojLamport();
 
     private final int                          puerto;
     private final int                          miId;   // nodo 1 o 2
+    private final RelojLamport                 relojLamport;
     private final GestorPersistencia<BDJuegos> gp;
+    private final ReplicadorEstado<BDJuegos>   replicador;
+    private final CacheIdempotencia             idempotencia = new CacheIdempotencia();
     private final ExecutorService              pool = Executors.newFixedThreadPool(Constantes.POOL_SIZE);
     private final Object                       lock = new Object(); // monitor compartido con GestorLocks
 
@@ -62,27 +64,30 @@ public class svJuegos {
     public svJuegos(int nodo, int puerto) {
         this.miId   = nodo;
         this.puerto = puerto;
+        this.relojLamport = new RelojLamport("JUE-" + nodo);
+        String main = RutasDatos.main("juegos", nodo);
+        String copy = RutasDatos.copy("juegos", nodo);
         this.gp     = new GestorPersistencia<>(
-                Constantes.GME_MAIN, Constantes.GME_COPY, BDJuegos.class);
+                main, copy, BDJuegos.class);
 
         // Sembrar solo si AMBOS archivos (Main y Copy) están ausentes o vacíos.
         // Si el Nodo 1 ya escribió Main+Copy, el Nodo 2 verá al menos uno no vacío
         // y no re-sembrará, evitando entradas duplicadas por arranque simultáneo.
         BDJuegos bd = gp.leer();
-        if (archivoVacio(Constantes.GME_MAIN) && archivoVacio(Constantes.GME_COPY)
+        if (archivoVacio(main) && archivoVacio(copy)
                 && (bd == null || bd.catalogo.isEmpty())) {
             if (bd == null) bd = new BDJuegos();
             // Stock alto y varios juegos para que la prueba de carga sostenga compras
             // reales (y por tanto ejercite el mutex del stock) durante toda la corrida.
-            bd.catalogo.add(new Juego(uuid(), "Counter-Strike 2",
+            bd.catalogo.add(new Juego("game-cs2", "Counter-Strike 2",
                     "FPS táctico multijugador", 29.99, 200, "vendedor1"));
-            bd.catalogo.add(new Juego(uuid(), "Cyberpunk 2077",
+            bd.catalogo.add(new Juego("game-cyberpunk", "Cyberpunk 2077",
                     "RPG de mundo abierto futurista", 59.99, 200, "vendedor1"));
-            bd.catalogo.add(new Juego(uuid(), "Stardew Valley",
+            bd.catalogo.add(new Juego("game-stardew", "Stardew Valley",
                     "Simulador de granja relajante", 14.99, 200, "vendedor1"));
-            bd.catalogo.add(new Juego(uuid(), "Hades",
+            bd.catalogo.add(new Juego("game-hades", "Hades",
                     "Roguelike de acción", 24.99, 200, "vendedor1"));
-            bd.catalogo.add(new Juego(uuid(), "Elden Ring",
+            bd.catalogo.add(new Juego("game-elden-ring", "Elden Ring",
                     "RPG de acción de mundo abierto", 49.99, 200, "vendedor1"));
             // Saldo para cada comprador cliente1..clienteN
             for (int i = 1; i <= Constantes.NUM_COMPRADORES; i++) {
@@ -92,6 +97,14 @@ public class svJuegos {
             bd.billeteras.put("admin",     0.0);
             try { gp.guardar(bd); } catch (IOException e) { LOG.severe("No se pudo sembrar BD: " + e.getMessage()); }
         }
+        int otroNodo = nodo == 1 ? 2 : 1;
+        int localRepl = nodo == 1 ? Constantes.PUERTO_JUE_1_REPL : Constantes.PUERTO_JUE_2_REPL;
+        int peerRepl = nodo == 1 ? Constantes.PUERTO_JUE_2_REPL : Constantes.PUERTO_JUE_1_REPL;
+        this.replicador = new ReplicadorEstado<>("JUEGOS", nodo, localRepl,
+                new Endpoint(Configuracion.hostServicio("juegos", otroNodo), peerRepl),
+                RutasDatos.version("juegos", nodo), BDJuegos.class,
+                () -> { synchronized (lock) { return gp.leer(); } },
+                estado -> { synchronized (lock) { guardarReplica(estado); } }, relojLamport);
     }
 
     // ── Punto de entrada ──────────────────────────────────────────────────────
@@ -111,25 +124,31 @@ public class svJuegos {
         int          peerId      = (nodo == 1) ? 2 : 1;
         int          peerBully   = (nodo == 1) ? Constantes.PUERTO_JUE_2_BULLY : Constantes.PUERTO_JUE_1_BULLY;
         int          peerMutex   = (nodo == 1) ? Constantes.PUERTO_JUE_2_MUTEX : Constantes.PUERTO_JUE_1_MUTEX;
-        List<NodoInfo> peers     = List.of(new NodoInfo(peerId, Constantes.HOST, peerBully, peerMutex));
+        List<NodoInfo> peers     = List.of(new NodoInfo(peerId,
+                Configuracion.hostServicio("juegos", peerId), peerBully, peerMutex));
 
-        sv.bully = new GestorBully(nodo, puertoBully, peers, relojLamport);
-        sv.mutex = new GestorMutexCentralizado(nodo, puertoMutex, sv.bully, relojLamport, peers);
+        sv.bully = new GestorBully(nodo, puertoBully, peers, sv.relojLamport);
+        sv.mutex = new GestorMutexCentralizado(nodo, puertoMutex, sv.bully, sv.relojLamport, peers);
 
         // ── Snapshot periódico: Main → Copy cada 30s (ambos nodos) ─────────
         GestorSnapshot snap = new GestorSnapshot(
-                Constantes.GME_MAIN, Constantes.GME_COPY, "svJuegos-" + nodo, 30);
+                RutasDatos.main("juegos", nodo), RutasDatos.copy("juegos", nodo),
+                "svJuegos-" + nodo, 30);
         snap.start(nodo == 1 ? 30 : 45);
 
         sv.mutex.startServidor();
         sv.bully.start();          // lanza elección automáticamente
+        sv.replicador.start();
         sv.iniciarGestorLocks();
 
         // ── Registro dinámico en el Proxy ────────────────────────────────────
-        RegistradorProxy.registrarAsync("JUEGOS", puerto, "JUE-" + nodo);
+        int puertoRepl = nodo == 1 ? Constantes.PUERTO_JUE_1_REPL : Constantes.PUERTO_JUE_2_REPL;
+        RegistradorProxy.registrarAsync("JUEGOS", nodo, puerto, "JUE-" + nodo,
+                puertoBully, puertoMutex, puertoRepl);
 
         Runtime.getRuntime().addShutdownHook(new Thread(
-            () -> RegistradorProxy.desregistrar("JUEGOS", puerto),
+            () -> { sv.replicador.stop(); sv.bully.stop(); sv.mutex.stop();
+                    RegistradorProxy.desregistrar("JUEGOS", puerto); },
             "shutdown-juegos-" + nodo
         ));
 
@@ -138,8 +157,7 @@ public class svJuegos {
 
     public void escuchar() {
         LOG.info("=== svJuegos iniciado en puerto " + puerto + " ===");
-        try (ServerSocket server = new ServerSocket(puerto)) {
-            server.setReuseAddress(true);
+        try (ServerSocket server = Transporte.servidor(puerto)) {
             while (true) {
                 Socket cliente = server.accept();
                 pool.submit(() -> manejarCliente(cliente));
@@ -151,7 +169,9 @@ public class svJuegos {
 
     /** Inicia el GestorLocks como hilo daemon. */
     private void iniciarGestorLocks() {
-        Thread t = new Thread(new GestorLocks(gp, lock), "gestor-locks");
+        Thread t = new Thread(new GestorLocks(gp, lock,
+                () -> miId == 1,
+                bd -> guardarReplicadoSinExcepcion(bd, "ttl-" + uuid())), "gestor-locks");
         t.setDaemon(true);
         t.start();
         LOG.info("[JUEGOS] GestorLocks daemon iniciado");
@@ -166,22 +186,28 @@ public class svJuegos {
              PrintWriter    out = new PrintWriter(
                      new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true)) {
 
-            socket.setSoTimeout(Constantes.TIMEOUT_MS);
-            String linea = in.readLine();
+            String linea = LineaJson.leer(in, Configuracion.maxMessageBytes());
             if (linea == null) return;
 
             MensajeProtocolo req = MensajeProtocolo.fromJson(linea);
+            String error = SeguridadMensajes.validarSolicitud(req);
+            if (error != null) {
+                out.println(MensajeProtocolo.error(req == null ? "?" : req.getRequestId(), error).toJson());
+                return;
+            }
             // Evento de recepción: actualizar reloj de Lamport
             relojLamport.update(req.getLamportClock());
 
-            MensajeProtocolo resp = procesar(req);
+            MensajeProtocolo resp = idempotencia.ejecutar(req.getRequestId(), () -> procesar(req));
             // Estampar reloj de Lamport en la respuesta
             resp.setLamportClock(relojLamport.tick());
+            resp.setEmisor("JUE-" + miId);
+            resp.setReceptor(req.getEmisor());
             out.println(resp.toJson());
 
         } catch (SocketTimeoutException e) {
             LOG.warning("[JUEGOS] Timeout en cliente");
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             LOG.warning("[JUEGOS] IO: " + e.getMessage());
         }
     }
@@ -200,6 +226,7 @@ public class svJuegos {
             case Constantes.HEALTH_CHECK          -> healthCheck(req);
             case Constantes.QUIEN_ES_COORDINADOR  -> quienEsCoordinador(req);
             case Constantes.VER_METRICAS_COORD    -> verMetricasCoord(req);
+            case Constantes.ESTADO_REPLICACION    -> estadoReplicacion(req);
             case Constantes.SHUTDOWN_GRACEFUL     -> shutdownGraceful(req);
             case Constantes.LISTAR_JUEGOS     -> listarJuegos(req);
             case Constantes.VER_JUEGO         -> verJuego(req);
@@ -236,6 +263,13 @@ public class svJuegos {
         return resp;
     }
 
+    private MensajeProtocolo estadoReplicacion(MensajeProtocolo req) {
+        MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "Replica de juegos");
+        resp.put("nodo", miId).put("version", replicador.getVersionActual())
+                .put("peer", replicador.getPeer().toString());
+        return resp;
+    }
+
     private MensajeProtocolo quienEsCoordinador(MensajeProtocolo req) {
         int coord = (bully != null) ? bully.getCoordinadorActual() : -1;
         MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "Coordinador actual");
@@ -263,6 +297,9 @@ public class svJuegos {
     }
 
     private MensajeProtocolo shutdownGraceful(MensajeProtocolo req) {
+        if (!SeguridadMensajes.validarControl(req)) {
+            return MensajeProtocolo.error(req.getRequestId(), "Firma de control invalida");
+        }
         LOG.warning("[FALLA] t=" + relojLamport.get()
                 + " Nodo " + miId + " recibió SHUTDOWN, cerrando...");
         MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "Cerrando nodo-" + miId);
@@ -329,19 +366,18 @@ public class svJuegos {
         String juegoId  = req.getString("juegoId");
         if (juegoId == null) return MensajeProtocolo.error(req.getRequestId(), "Falta juegoId");
 
-        // ── Mutex distribuido (solo si soy no-coordinador) ────────────────────
-        boolean usaMutex = bully != null && !bully.isCoordinador()
-                           && bully.getCoordinadorActual() != -1;
-        if (usaMutex) {
-            try { mutex.requestLock("stock", miId); }
-            catch (MutexTimeoutException e) {
-                LOG.warning("[MUTEX] Timeout en COMPRAR_JUEGO: " + e.getMessage());
-                return MensajeProtocolo.error(req.getRequestId(),
-                        "Coordinador no disponible temporalmente. Reintenta.");
-            }
+        GestorMutexCentralizado.LockHandle lockStock;
+        try { lockStock = mutex.requestLock("stock", miId); }
+        catch (MutexTimeoutException e) {
+            LOG.warning("[MUTEX] Timeout en COMPRAR_JUEGO: " + e.getMessage());
+            return MensajeProtocolo.error(req.getRequestId(),
+                    "Coordinador no disponible temporalmente. Reintenta.");
         }
         // ── REGIÓN CRÍTICA: Gestión de Stock Finito ──
         try { synchronized (lock) {
+            if (!mutex.lockVigente(lockStock)) {
+                return MensajeProtocolo.error(req.getRequestId(), "La concesion de stock perdio vigencia");
+            }
             BDJuegos bd = gp.leer();
             if (bd == null) return MensajeProtocolo.error(req.getRequestId(), "BD no disponible");
 
@@ -380,7 +416,7 @@ public class svJuegos {
             bd.reservas.add(reserva);
 
             try {
-                gp.guardar(bd);  // escritura Main + replicación Copy
+                guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
                 // Rollback en memoria (no llegó a guardarse)
                 juego.stock++;
@@ -397,7 +433,7 @@ public class svJuegos {
             return resp;
         } } finally {
             // Liberar mutex distribuido siempre, incluso si hubo excepción
-            if (usaMutex) mutex.releaseLock("stock", miId);
+            mutex.releaseLock(lockStock, miId);
         }
     }
 
@@ -416,18 +452,17 @@ public class svJuegos {
         String reservaId = req.getString("reservaId");
         if (reservaId == null) return MensajeProtocolo.error(req.getRequestId(), "Falta reservaId");
 
-        // ── Mutex distribuido (solo si soy no-coordinador) ────────────────────
-        boolean usaMutexPago = bully != null && !bully.isCoordinador()
-                               && bully.getCoordinadorActual() != -1;
-        if (usaMutexPago) {
-            try { mutex.requestLock("stock", miId); }
-            catch (MutexTimeoutException e) {
-                return MensajeProtocolo.error(req.getRequestId(),
-                        "Coordinador no disponible. Reintenta.");
-            }
+        GestorMutexCentralizado.LockHandle lockStock;
+        try { lockStock = mutex.requestLock("stock", miId); }
+        catch (MutexTimeoutException e) {
+            return MensajeProtocolo.error(req.getRequestId(),
+                    "Coordinador no disponible. Reintenta.");
         }
         // ── REGIÓN CRÍTICA: Finalización de Venta ──
         try { synchronized (lock) {
+            if (!mutex.lockVigente(lockStock)) {
+                return MensajeProtocolo.error(req.getRequestId(), "La concesion de stock perdio vigencia");
+            }
             BDJuegos bd = gp.leer();
             if (bd == null) return MensajeProtocolo.error(req.getRequestId(), "BD no disponible");
 
@@ -444,7 +479,7 @@ public class svJuegos {
                 // Restaurar stock (el daemon puede no haber corrido aún)
                 bd.catalogo.stream().filter(j -> j.id.equals(reserva.juegoId))
                         .findFirst().ifPresent(j -> j.stock++);
-                try { gp.guardar(bd); } catch (IOException ignored) {}
+                try { guardarReplicado(bd, req.getRequestId()); } catch (IOException ignored) {}
                 return MensajeProtocolo.error(req.getRequestId(),
                         "Tiempo agotado. La reserva expiró y el stock fue liberado.");
             }
@@ -482,7 +517,7 @@ public class svJuegos {
             reserva.activa = false;
 
             try {
-                gp.guardar(bd);  // Main + Copy
+                guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
                 return MensajeProtocolo.error(req.getRequestId(), "Error de persistencia");
             }
@@ -493,7 +528,7 @@ public class svJuegos {
             resp.put("saldoRestante", bd.billeteras.get(auth.username()));
             return resp;
         } } finally {
-            if (usaMutexPago) mutex.releaseLock("stock", miId);
+            mutex.releaseLock(lockStock, miId);
         }
     }
 
@@ -523,7 +558,7 @@ public class svJuegos {
                     .findFirst().ifPresent(j -> j.stock++);
 
             try {
-                gp.guardar(bd);
+                guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
                 return MensajeProtocolo.error(req.getRequestId(), "Error de persistencia");
             }
@@ -564,7 +599,7 @@ public class svJuegos {
             bd.billeteras.putIfAbsent(auth.username(), 0.0);
 
             try {
-                gp.guardar(bd);
+                guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
                 return MensajeProtocolo.error(req.getRequestId(), "Error de persistencia");
             }
@@ -602,7 +637,7 @@ public class svJuegos {
             if (req.getInt("stockExtra")     >  0)    juego.stock      += req.getInt("stockExtra");
 
             try {
-                gp.guardar(bd);
+                guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
                 return MensajeProtocolo.error(req.getRequestId(), "Error de persistencia");
             }
@@ -631,7 +666,7 @@ public class svJuegos {
 
             juego.activo = false;
             try {
-                gp.guardar(bd);
+                guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
                 return MensajeProtocolo.error(req.getRequestId(), "Error de persistencia");
             }
@@ -680,7 +715,7 @@ public class svJuegos {
             bd.billeteras.put(targetUser, actual + monto);
 
             try {
-                gp.guardar(bd);
+                guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
                 return MensajeProtocolo.error(req.getRequestId(), "Error de persistencia");
             }
@@ -833,6 +868,23 @@ public class svJuegos {
     private static String uuid() { return UUID.randomUUID().toString(); }
 
     /** Retorna true si el archivo no existe o tiene tamaño 0. */
+    private void guardarReplicado(BDJuegos bd, String requestId) throws IOException {
+        gp.guardar(bd);
+        ReplicadorEstado.Resultado resultado = replicador.registrarCambioLocal(bd, requestId);
+        LOG.info("[REPL] requestId=" + requestId + " version=" + resultado.version()
+                + " confirmada=" + resultado.confirmada());
+    }
+
+    private void guardarReplicadoSinExcepcion(BDJuegos bd, String requestId) {
+        try { guardarReplicado(bd, requestId); }
+        catch (IOException e) { throw new IllegalStateException("No se pudo persistir", e); }
+    }
+
+    private void guardarReplica(BDJuegos estado) {
+        try { gp.guardar(estado); }
+        catch (IOException e) { throw new IllegalStateException("No se pudo aplicar replica", e); }
+    }
+
     private static boolean archivoVacio(String path) {
         File f = new File(path);
         return !f.exists() || f.length() == 0;

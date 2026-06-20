@@ -24,7 +24,7 @@ import java.util.logging.Logger;
 public class ValidadorToken {
 
     private static final Logger LOG     = Logger.getLogger(ValidadorToken.class.getName());
-    private static final long   TTL_MS  = 30_000L; // 30 segundos
+    private static final long   TTL_MS  = 2_000L;
 
     /** Resultado de la validación */
     public record ResultadoValidacion(boolean valido, String username, String rol, String mensaje) {}
@@ -58,10 +58,13 @@ public class ValidadorToken {
         MensajeProtocolo req = MensajeProtocolo.request(Constantes.VALIDAR_TOKEN, token);
         req.setTipo(MensajeProtocolo.TIPO_REQUEST);
 
-        int[] puertos = { Constantes.PUERTO_SES_1, Constantes.PUERTO_SES_2 };
-        for (int puerto : puertos) {
+        Endpoint[] destinos = {
+                new Endpoint(Configuracion.hostServicio("sesiones", 1), Constantes.PUERTO_SES_1),
+                new Endpoint(Configuracion.hostServicio("sesiones", 2), Constantes.PUERTO_SES_2)
+        };
+        for (Endpoint destino : destinos) {
             try {
-                MensajeProtocolo resp = enviarYRecibir(req, puerto);
+                MensajeProtocolo resp = enviarYRecibir(req, destino);
                 if (resp != null && resp.isOk()) {
                     ResultadoValidacion resultado = new ResultadoValidacion(
                             true, resp.getString("username"), resp.getString("rol"), "Token válido");
@@ -75,7 +78,7 @@ public class ValidadorToken {
                     return new ResultadoValidacion(false, null, null, resp.getMensaje());
                 }
             } catch (Exception e) {
-                LOG.warning("svSesiones:" + puerto + " no disponible. " + e.getMessage());
+                LOG.warning("svSesiones " + destino + " no disponible. " + e.getMessage());
             }
         }
         return new ResultadoValidacion(false, null, null, "Servicio de sesiones no disponible");
@@ -92,16 +95,15 @@ public class ValidadorToken {
 
     // ── Transporte ────────────────────────────────────────────────────────────
 
-    private static MensajeProtocolo enviarYRecibir(MensajeProtocolo req, int puerto)
+    private static MensajeProtocolo enviarYRecibir(MensajeProtocolo req, Endpoint destino)
             throws IOException {
-        try (Socket socket = new Socket(Constantes.HOST, puerto)) {
-            socket.setSoTimeout(Constantes.TIMEOUT_MS);
+        try (Socket socket = Transporte.conectar(destino.host(), destino.puerto())) {
             PrintWriter   out = new PrintWriter(
                     new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
             BufferedReader in = new BufferedReader(
                     new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
             out.println(req.toJson());
-            String respJson = in.readLine();
+            String respJson = LineaJson.leer(in, Configuracion.maxMessageBytes());
             return respJson != null ? MensajeProtocolo.fromJson(respJson) : null;
         }
     }

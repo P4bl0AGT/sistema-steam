@@ -1,0 +1,80 @@
+[
+  {
+    "id": "JUEGOS-localhost:8082",
+    "tipoServicio": "JUEGOS",
+    "nombre": "JUE-1",
+    "host": "localhost",
+    "puertoServicio": 8082,
+    "puertoBully": 9082,
+    "puertoMutex": 9182,
+    "puertoReplicacion": 9482,
+    "activo": true,
+    "ultimoHeartbeat": 1781991657245,
+    "lamportJoin": 73712
+  },
+  {
+    "id": "JUEGOS-localhost:8282",
+    "tipoServicio": "JUEGOS",
+    "nombre": "JUE-2",
+    "host": "localhost",
+    "puertoServicio": 8282,
+    "puertoBully": 9282,
+    "puertoMutex": 9382,
+    "puertoReplicacion": 9582,
+    "activo": true,
+    "ultimoHeartbeat": 1781991657248,
+    "lamportJoin": 73717
+  },
+  {
+    "id": "MENSAJERIA-localhost:8083",
+    "tipoServicio": "MENSAJERIA",
+    "nombre": "MSG-1",
+    "host": "localhost",
+    "puertoServicio": 8083,
+    "puertoBully": 0,
+    "puertoMutex": 0,
+    "puertoReplicacion": 9484,
+    "activo": true,
+    "ultimoHeartbeat": 1781991657250,
+    "lamportJoin": 73722
+  },
+  {
+    "id": "MENSAJERIA-localhost:8383",
+    "tipoServicio": "MENSAJERIA",
+    "nombre": "MSG-2",
+    "host": "localhost",
+    "puertoServicio": 8383,
+    "puertoBully": 0,
+    "puertoMutex": 0,
+    "puertoReplicacion": 9584,
+    "activo": true,
+    "ultimoHeartbeat": 1781991657253,
+    "lamportJoin": 73728
+  },
+  {
+    "id": "SESIONES-localhost:8081",
+    "tipoServicio": "SESIONES",
+    "nombre": "SES-1",
+    "host": "localhost",
+    "puertoServicio": 8081,
+    "puertoBully": 0,
+    "puertoMutex": 0,
+    "puertoReplicacion": 9483,
+    "activo": true,
+    "ultimoHeartbeat": 1781991657239,
+    "lamportJoin": 73700
+  },
+  {
+    "id": "SESIONES-localhost:8181",
+    "tipoServicio": "SESIONES",
+    "nombre": "SES-2",
+    "host": "localhost",
+    "puertoServicio": 8181,
+    "puertoBully": 0,
+    "puertoMutex": 0,
+    "puertoReplicacion": 9583,
+    "activo": true,
+    "ultimoHeartbeat": 1781991657242,
+    "lamportJoin": 73707
+  }
+]

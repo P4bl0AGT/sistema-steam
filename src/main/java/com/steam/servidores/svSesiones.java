@@ -33,25 +33,36 @@ import java.util.logging.*;
  */
 public class svSesiones {
 
-    private static final Logger       LOG          = Logger.getLogger(svSesiones.class.getName());
-    private static final RelojLamport relojLamport = new RelojLamport();
+    private static final Logger LOG = Logger.getLogger(svSesiones.class.getName());
 
+    private final int                          nodo;
     private final int                          puerto;
+    private final RelojLamport                 relojLamport;
     private final GestorPersistencia<BDSesiones> gp;
+    private final ReplicadorEstado<BDSesiones> replicador;
+    private final CacheIdempotencia             idempotencia = new CacheIdempotencia();
     private final ExecutorService              pool   = Executors.newFixedThreadPool(Constantes.POOL_SIZE);
     private final Object                       lock   = new Object(); // monitor de acceso a BD
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public svSesiones(int puerto) {
+        this(puerto == Constantes.PUERTO_SES_2 ? 2 : 1, puerto);
+    }
+
+    public svSesiones(int nodo, int puerto) {
+        this.nodo = nodo;
         this.puerto = puerto;
+        this.relojLamport = new RelojLamport("SES-" + nodo);
+        String main = RutasDatos.main("sesiones", nodo);
+        String copy = RutasDatos.copy("sesiones", nodo);
         this.gp     = new GestorPersistencia<>(
-                Constantes.SES_MAIN, Constantes.SES_COPY, BDSesiones.class);
+                main, copy, BDSesiones.class);
 
         // Sembrar solo si AMBOS archivos (Main y Copy) están ausentes o vacíos.
         // Evita que el Nodo 2 re-siembre usuarios cuando el Nodo 1 ya escribió.
         BDSesiones bd = gp.leer();
-        if (archivoVacio(Constantes.SES_MAIN) && archivoVacio(Constantes.SES_COPY)
+        if (archivoVacio(main) && archivoVacio(copy)
                 && (bd == null || bd.usuarios.isEmpty())) {
             if (bd == null) bd = new BDSesiones();
             bd.usuarios.add(new Usuario("admin",     Utils.hashPassword("admin123"), Constantes.ROL_ADMIN));
@@ -63,6 +74,14 @@ public class svSesiones {
             }
             try { gp.guardar(bd); } catch (IOException e) { LOG.severe("No se pudo sembrar BD: " + e.getMessage()); }
         }
+        int otroNodo = nodo == 1 ? 2 : 1;
+        int localRepl = nodo == 1 ? Constantes.PUERTO_SES_1_REPL : Constantes.PUERTO_SES_2_REPL;
+        int peerRepl = nodo == 1 ? Constantes.PUERTO_SES_2_REPL : Constantes.PUERTO_SES_1_REPL;
+        this.replicador = new ReplicadorEstado<>("SESIONES", nodo, localRepl,
+                new Endpoint(Configuracion.hostServicio("sesiones", otroNodo), peerRepl),
+                RutasDatos.version("sesiones", nodo), BDSesiones.class,
+                () -> { synchronized (lock) { return gp.leer(); } },
+                estado -> { synchronized (lock) { guardarReplica(estado); } }, relojLamport);
     }
 
     // ── Punto de entrada ──────────────────────────────────────────────────────
@@ -72,24 +91,28 @@ public class svSesiones {
         int puerto = (nodo == 2) ? Constantes.PUERTO_SES_2 : Constantes.PUERTO_SES_1;
         GestorLog.configurar("svSesiones-" + nodo);
 
-        svSesiones sv = new svSesiones(puerto);
+        svSesiones sv = new svSesiones(nodo, puerto);
+        sv.replicador.start();
 
         // ── Snapshot periódico: Main → Copy cada 30s (ambos nodos) ─────────
         // Nodo 1: primer snapshot a los 30s. Nodo 2: primer snapshot a los 45s.
         // El escalonamiento evita que ambos nodos escriban al mismo .snap.tmp
         // simultáneamente. Si Nodo 1 cae, Nodo 2 sigue actualizando la Copy.
         GestorSnapshot snap = new GestorSnapshot(
-                Constantes.SES_MAIN, Constantes.SES_COPY, "svSesiones-" + nodo, 30);
+                RutasDatos.main("sesiones", nodo), RutasDatos.copy("sesiones", nodo),
+                "svSesiones-" + nodo, 30);
         snap.start(nodo == 1 ? 30 : 45);
 
         // ── Registro dinámico en el Proxy ────────────────────────────────────
         // RegistradorProxy intenta contactar al Proxy con reintentos en un hilo
         // daemon, por lo que no bloquea el arranque del servidor.
-        RegistradorProxy.registrarAsync("SESIONES", puerto, "SES-" + nodo);
+        int puertoRepl = nodo == 1 ? Constantes.PUERTO_SES_1_REPL : Constantes.PUERTO_SES_2_REPL;
+        RegistradorProxy.registrarAsync("SESIONES", nodo, puerto, "SES-" + nodo,
+                0, 0, puertoRepl);
 
         // ── Desregistrar del Proxy al apagarse ───────────────────────────────
         Runtime.getRuntime().addShutdownHook(new Thread(
-            () -> RegistradorProxy.desregistrar("SESIONES", puerto),
+            () -> { sv.replicador.stop(); RegistradorProxy.desregistrar("SESIONES", puerto); },
             "shutdown-sesiones-" + nodo
         ));
 
@@ -98,8 +121,7 @@ public class svSesiones {
 
     public void escuchar() {
         LOG.info("=== svSesiones iniciado en puerto " + puerto + " ===");
-        try (ServerSocket server = new ServerSocket(puerto)) {
-            server.setReuseAddress(true);
+        try (ServerSocket server = Transporte.servidor(puerto)) {
             while (true) {
                 Socket cliente = server.accept();
                 pool.submit(() -> manejarCliente(cliente));
@@ -118,20 +140,26 @@ public class svSesiones {
              PrintWriter    out = new PrintWriter(
                      new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true)) {
 
-            socket.setSoTimeout(Constantes.TIMEOUT_MS);
-            String linea = in.readLine();
+            String linea = LineaJson.leer(in, Configuracion.maxMessageBytes());
             if (linea == null) return;
 
             MensajeProtocolo req = MensajeProtocolo.fromJson(linea);
+            String error = SeguridadMensajes.validarSolicitud(req);
+            if (error != null) {
+                out.println(MensajeProtocolo.error(req == null ? "?" : req.getRequestId(), error).toJson());
+                return;
+            }
             relojLamport.update(req.getLamportClock());
 
-            MensajeProtocolo resp = procesar(req);
+            MensajeProtocolo resp = idempotencia.ejecutar(req.getRequestId(), () -> procesar(req));
             resp.setLamportClock(relojLamport.tick());
+            resp.setEmisor("SES-" + nodo);
+            resp.setReceptor(req.getEmisor());
             out.println(resp.toJson());
 
         } catch (SocketTimeoutException e) {
             LOG.warning("[SES] Timeout en cliente");
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             LOG.warning("[SES] IO: " + e.getMessage());
         }
     }
@@ -147,6 +175,7 @@ public class svSesiones {
 
         return switch (req.getOperacion()) {
             case Constantes.HEALTH_CHECK      -> healthCheck(req);
+            case Constantes.ESTADO_REPLICACION -> estadoReplicacion(req);
             case Constantes.LOGIN             -> login(req);
             case Constantes.LOGOUT            -> logout(req);
             case Constantes.VALIDAR_TOKEN     -> validarToken(req);
@@ -163,6 +192,13 @@ public class svSesiones {
     private MensajeProtocolo healthCheck(MensajeProtocolo req) {
         MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "svSesiones OK");
         resp.put("puerto", puerto);
+        return resp;
+    }
+
+    private MensajeProtocolo estadoReplicacion(MensajeProtocolo req) {
+        MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "Replica de sesiones");
+        resp.put("nodo", nodo).put("version", replicador.getVersionActual())
+                .put("peer", replicador.getPeer().toString());
         return resp;
     }
 
@@ -194,6 +230,8 @@ public class svSesiones {
             bd.sesiones.stream()
                     .filter(s -> s.username.equals(username) && s.activa)
                     .forEach(s -> s.activa = false);
+            bd.sesiones.removeIf(s -> !s.activa
+                    && System.currentTimeMillis() - s.creadoEn > Configuracion.tokenTtlMs());
 
             // Crear nueva sesión
             String  token = UUID.randomUUID().toString();
@@ -201,7 +239,7 @@ public class svSesiones {
             bd.sesiones.add(sesion);
 
             try {
-                gp.guardar(bd);  // Main + Copy
+                guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
                 return MensajeProtocolo.error(req.getRequestId(), "Error de persistencia");
             }
@@ -225,7 +263,7 @@ public class svSesiones {
             if (bd == null) return MensajeProtocolo.error(req.getRequestId(), "BD no disponible");
 
             Optional<Sesion> sesion = bd.sesiones.stream()
-                    .filter(s -> s.token.equals(token) && s.activa)
+                    .filter(s -> s.token.equals(token) && s.vigente())
                     .findFirst();
 
             if (sesion.isEmpty()) {
@@ -234,7 +272,7 @@ public class svSesiones {
 
             sesion.get().activa = false;
             try {
-                gp.guardar(bd);
+                guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
                 return MensajeProtocolo.error(req.getRequestId(), "Error de persistencia");
             }
@@ -256,7 +294,7 @@ public class svSesiones {
             if (bd == null) return MensajeProtocolo.error(req.getRequestId(), "BD no disponible");
 
             Optional<Sesion> sesion = bd.sesiones.stream()
-                    .filter(s -> s.token.equals(token) && s.activa)
+                    .filter(s -> s.token.equals(token) && s.vigente())
                     .findFirst();
 
             if (sesion.isEmpty()) {
@@ -309,7 +347,7 @@ public class svSesiones {
 
             bd.usuarios.add(new Usuario(nuevoUser, Utils.hashPassword(nuevaPass), nuevoRol));
             try {
-                gp.guardar(bd);
+                guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
                 return MensajeProtocolo.error(req.getRequestId(), "Error de persistencia");
             }
@@ -338,7 +376,7 @@ public class svSesiones {
                 info.put("activo",   u.activo);
                 lista.add(info);
             }
-            long sesActivas = bd.sesiones.stream().filter(s -> s.activa).count();
+            long sesActivas = bd.sesiones.stream().filter(Sesion::vigente).count();
             MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(),
                     "Total usuarios: " + bd.usuarios.size());
             resp.put("usuarios",         lista);
@@ -373,7 +411,7 @@ public class svSesiones {
 
             optUser.get().passwordHash = Utils.hashPassword(passNueva);
             try {
-                gp.guardar(bd);
+                guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
                 return MensajeProtocolo.error(req.getRequestId(), "Error de persistencia");
             }
@@ -382,6 +420,18 @@ public class svSesiones {
     }
 
     /** Retorna true si el archivo no existe o tiene tamaño 0. */
+    private void guardarReplicado(BDSesiones bd, String requestId) throws IOException {
+        gp.guardar(bd);
+        ReplicadorEstado.Resultado resultado = replicador.registrarCambioLocal(bd, requestId);
+        LOG.info("[REPL] requestId=" + requestId + " version=" + resultado.version()
+                + " confirmada=" + resultado.confirmada());
+    }
+
+    private void guardarReplica(BDSesiones estado) {
+        try { gp.guardar(estado); }
+        catch (IOException e) { throw new IllegalStateException("No se pudo aplicar replica", e); }
+    }
+
     private static boolean archivoVacio(String path) {
         File f = new File(path);
         return !f.exists() || f.length() == 0;

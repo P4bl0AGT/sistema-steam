@@ -15,6 +15,13 @@ import java.util.concurrent.atomic.AtomicLong;
 public class RelojLamport {
 
     private final AtomicLong reloj = new AtomicLong(0);
+    private final String nombreNodo;
+
+    public RelojLamport() { this("nodo"); }
+
+    public RelojLamport(String nombreNodo) {
+        this.nombreNodo = nombreNodo == null ? "nodo" : nombreNodo;
+    }
 
     /** Evento local o de envío: incrementa y retorna el nuevo valor. */
     public long tick() {
@@ -38,4 +45,6 @@ public class RelojLamport {
     public long get() {
         return reloj.get();
     }
+
+    public String getNombreNodo() { return nombreNodo; }
 }

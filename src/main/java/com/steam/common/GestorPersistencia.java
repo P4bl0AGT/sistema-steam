@@ -157,9 +157,15 @@ public class GestorPersistencia<T> {
 
     private void asegurarDirectorio() {
         try {
-            Files.createDirectories(Path.of(Constantes.DATA_DIR));
+            crearPadre(pathMain);
+            crearPadre(pathCopy);
         } catch (IOException e) {
             LOG.severe("No se pudo crear directorio de datos: " + e.getMessage());
         }
+    }
+
+    private static void crearPadre(String archivo) throws IOException {
+        Path padre = Path.of(archivo).toAbsolutePath().getParent();
+        if (padre != null) Files.createDirectories(padre);
     }
 }
