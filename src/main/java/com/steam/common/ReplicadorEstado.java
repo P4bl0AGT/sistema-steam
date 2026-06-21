@@ -35,7 +35,7 @@ public final class ReplicadorEstado<T> {
 
     private final String servicio;
     private final int nodoId;
-    private final int writerNodeId;
+    private final int writerPreferidoId;
     private final int peerNodeId;
     private final int puertoLocal;
     private final Endpoint peer;
@@ -48,6 +48,8 @@ public final class ReplicadorEstado<T> {
     private final AtomicLong versionActual = new AtomicLong();
     private final AtomicBoolean running = new AtomicBoolean();
     private final AtomicBoolean listoParaEscrituras = new AtomicBoolean();
+    private final AtomicBoolean promovido = new AtomicBoolean();
+    private final AtomicLong ultimoContactoPeer = new AtomicLong(System.currentTimeMillis());
     private volatile boolean peerAlcanzable;
     private final ExecutorService workers = Ejecutores.acotado(
             "replica-worker-" + servicioSeguro(), 16, true);
@@ -63,7 +65,7 @@ public final class ReplicadorEstado<T> {
                             Consumer<T> aplicadorLocal, RelojLamport reloj) {
         this.servicio = servicio;
         this.nodoId = nodoId;
-        this.writerNodeId = Configuracion.writerNodeId(servicio);
+        this.writerPreferidoId = Configuracion.writerNodeId(servicio);
         this.peerNodeId = nodoId == 1 ? 2 : 1;
         this.puertoLocal = puertoLocal;
         this.peer = peer;
@@ -84,8 +86,7 @@ public final class ReplicadorEstado<T> {
         server.start();
         scheduler.scheduleWithFixedDelay(this::sincronizarSeguro, 2_000,
                 Configuracion.replicationIntervalMs(), TimeUnit.MILLISECONDS);
-        LOG.info("[REPL] servicio=" + servicio + " nodo=" + nodoId + " local=" + puertoLocal
-                + " peer=" + peer + " version=" + versionActual.get());
+        logEvento("START", "peer=" + peer + " version=" + versionActual.get());
     }
 
     public void stop() {
@@ -96,8 +97,9 @@ public final class ReplicadorEstado<T> {
     }
 
     public Resultado registrarCambioLocal(T estado, String requestId) {
-        if (nodoId != writerNodeId) {
-            throw new IllegalStateException("Nodo " + nodoId + " no es writer de " + servicio);
+        if (!isWriterActivo()) {
+            throw new IllegalStateException("Nodo " + nodoId + " no es writer activo de " + servicio
+                    + "; writer=" + getWriterActivoId());
         }
         if (running.get() && !listoParaEscrituras.get()) {
             throw new IllegalStateException("Writer aun no reconciliado con su replica");
@@ -125,8 +127,15 @@ public final class ReplicadorEstado<T> {
     public long getVersionActual() { return versionActual.get(); }
     public Endpoint getPeer() { return peer; }
     public boolean isPeerAlcanzable() { return peerAlcanzable; }
+    public boolean isWriterActivo() {
+        if (!running.get()) return nodoId == writerPreferidoId;
+        return nodoId == writerPreferidoId ? !promovido.get() : promovido.get();
+    }
+    public int getWriterActivoId() {
+        return promovido.get() ? peerSecundarioId() : writerPreferidoId;
+    }
     public boolean isListoParaEscrituras() {
-        return nodoId != writerNodeId || !running.get() || listoParaEscrituras.get();
+        return isWriterActivo() && (!running.get() || listoParaEscrituras.get());
     }
 
     private void servidorLoop() {
@@ -161,6 +170,9 @@ public final class ReplicadorEstado<T> {
                 return;
             }
             reloj.update(msg.lamportClock);
+            LOG.info("[REPL] evento=RECEIVE servicio=" + servicio + " nodo=" + nodoId
+                    + " lamport=" + reloj.get() + " tipo=" + msg.tipo
+                    + " requestId=" + msg.requestId + " version=" + msg.version);
             if (MensajeReplicacion.PULL.equals(msg.tipo)) {
                 MensajeReplicacion snapshot = respuesta(MensajeReplicacion.SNAPSHOT, "Estado actual");
                 snapshot.requestId = msg.requestId;
@@ -172,7 +184,7 @@ public final class ReplicadorEstado<T> {
                 return;
             }
             if (MensajeReplicacion.PUSH.equals(msg.tipo)) {
-                if (msg.nodoOrigen != writerNodeId || !versionPerteneceAlWriter(msg.version)) {
+                if (emisorVersion(msg.version) != msg.nodoOrigen) {
                     out.println(respuesta(MensajeReplicacion.ERROR, "Origen no autorizado").toJson());
                     return;
                 }
@@ -209,8 +221,7 @@ public final class ReplicadorEstado<T> {
         versionActual.set(msg.version);
         secuencia.accumulateAndGet(msg.version >>> 8, Math::max);
         persistirVersion(msg.version);
-        LOG.info("[REPL] APPLY servicio=" + servicio + " nodo=" + nodoId
-                + " version=" + msg.version + " requestId=" + msg.requestId);
+        logEvento("APPLY", "version=" + msg.version + " requestId=" + msg.requestId);
         return true;
     }
 
@@ -240,7 +251,11 @@ public final class ReplicadorEstado<T> {
 
     private void sincronizarSeguro() {
         try { sincronizar(); }
-        catch (Exception e) { peerAlcanzable = false; LOG.fine("[REPL] Sync pendiente con " + peer + ": " + e.getMessage()); }
+        catch (Exception e) {
+            peerAlcanzable = false;
+            evaluarPromocion();
+            LOG.fine("[REPL] Sync pendiente con " + peer + ": " + e.getMessage());
+        }
     }
 
     private void sincronizar() throws Exception {
@@ -257,6 +272,11 @@ public final class ReplicadorEstado<T> {
             return;
         }
         peerAlcanzable = true;
+        ultimoContactoPeer.set(System.currentTimeMillis());
+        if (nodoId != writerPreferidoId && promovido.compareAndSet(true, false)) {
+            listoParaEscrituras.set(false);
+            logEvento("DEMOTE", "writerPreferido=" + writerPreferidoId);
+        }
 
         long local;
         String snapshotJson = null;
@@ -273,11 +293,11 @@ public final class ReplicadorEstado<T> {
                 accion = 4;
             } else if (remoto.version > local && remoto.payloadJson != null) {
                 accion = 1;
-            } else if (local > remoto.version && nodoId == writerNodeId) {
+            } else if (local > remoto.version && isWriterActivo()) {
                 snapshotJson = GSON.toJson(lectorLocal.get());
                 versionPush = local;
                 accion = 2;
-            } else if (local == remoto.version && local == 0L && nodoId == writerNodeId) {
+            } else if (local == remoto.version && local == 0L && isWriterActivo()) {
                 T estado = lectorLocal.get();
                 if (estado != null) {
                     versionPush = siguienteVersion(0L);
@@ -301,7 +321,7 @@ public final class ReplicadorEstado<T> {
             case 4 -> reconciliado = aplicarRecuperacion(remoto);
             default -> reconciliado = snapshotsIguales(remoto);
         }
-        if (nodoId == writerNodeId) {
+        if (isWriterActivo()) {
             listoParaEscrituras.set(reconciliado);
         }
     }
@@ -314,7 +334,7 @@ public final class ReplicadorEstado<T> {
         versionActual.set(msg.version);
         secuencia.accumulateAndGet(msg.version >>> 8, Math::max);
         persistirVersion(msg.version);
-        LOG.warning("[REPL] Snapshot local reparado desde peer version=" + msg.version);
+        logEvento("REPAIR", "version=" + msg.version);
         return true;
     }
 
@@ -330,7 +350,7 @@ public final class ReplicadorEstado<T> {
     }
 
     private T estadoRemotoValido(MensajeReplicacion msg) {
-        if (!versionPerteneceAlWriter(msg.version) || msg.payloadJson == null) return null;
+        if (!versionAceptable(msg.version) || msg.payloadJson == null) return null;
         T estado = GSON.fromJson(msg.payloadJson, tipo);
         if (estado instanceof EstadoVersionado && versionEstado(estado) != msg.version) return null;
         asignarVersion(estado, msg.version);
@@ -346,11 +366,31 @@ public final class ReplicadorEstado<T> {
     }
 
     private boolean versionAceptable(long version) {
-        return version == 0L || versionPerteneceAlWriter(version);
+        return version == 0L || emisorVersion(version) == 1 || emisorVersion(version) == 2;
     }
 
-    private boolean versionPerteneceAlWriter(long version) {
-        return version > 0L && (int) (version & 0xffL) == writerNodeId;
+    private int emisorVersion(long version) {
+        return version > 0L ? (int) (version & 0xffL) : 0;
+    }
+
+    private int peerSecundarioId() {
+        return writerPreferidoId == 1 ? 2 : 1;
+    }
+
+    private void evaluarPromocion() {
+        if (nodoId == writerPreferidoId || promovido.get()) return;
+        long timeout = Configuracion.getLong("steam.writer.failover.ms", 8_000L);
+        if (System.currentTimeMillis() - ultimoContactoPeer.get() < timeout) return;
+        if (promovido.compareAndSet(false, true)) {
+            listoParaEscrituras.set(true);
+            logEvento("PROMOTE", "writerAnterior=" + writerPreferidoId + " timeoutMs=" + timeout);
+        }
+    }
+
+    private void logEvento(String evento, String detalle) {
+        long marca = reloj.tick();
+        LOG.info("[REPL] evento=" + evento + " servicio=" + servicio + " nodo=" + nodoId
+                + " lamport=" + marca + " " + detalle);
     }
 
     private long siguienteVersion(long piso) {
@@ -360,6 +400,9 @@ public final class ReplicadorEstado<T> {
     }
 
     private MensajeReplicacion enviar(MensajeReplicacion msg) throws Exception {
+        LOG.info("[REPL] evento=SEND servicio=" + servicio + " nodo=" + nodoId
+                + " lamport=" + msg.lamportClock + " tipo=" + msg.tipo
+                + " requestId=" + msg.requestId + " version=" + msg.version);
         try (Socket socket = Transporte.conectar(peer.host(), peer.puerto());
              PrintWriter out = new PrintWriter(new OutputStreamWriter(
                      socket.getOutputStream(), StandardCharsets.UTF_8), true);

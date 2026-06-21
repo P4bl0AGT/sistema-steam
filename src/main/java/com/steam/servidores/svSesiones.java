@@ -192,9 +192,9 @@ public class svSesiones {
     private MensajeProtocolo procesar(MensajeProtocolo req) {
         if (req == null) return MensajeProtocolo.error("?", "INVALID_REQUEST", "Mensaje inválido");
         if (Utils.esOperacionEscritura(req.getOperacion())) {
-            if (nodo != Configuracion.writerNodeId("SESIONES")) {
+            if (!replicador.isWriterActivo()) {
                 return MensajeProtocolo.error(req.getRequestId(), "NOT_PRIMARY",
-                        "Nodo secundario de sesiones; escritor=" + Configuracion.writerNodeId("SESIONES"));
+                        "Nodo secundario de sesiones; escritor=" + replicador.getWriterActivoId());
             }
             if (!replicador.isListoParaEscrituras()) {
                 return MensajeProtocolo.error(req.getRequestId(), "SERVICE_UNAVAILABLE",
@@ -205,6 +205,10 @@ public class svSesiones {
         // HEALTH_CHECK se logea en FINE para no inundar el log.
         LOG.log(Constantes.HEALTH_CHECK.equals(req.getOperacion()) ? Level.FINE : Level.INFO,
                 "[SES] op=" + req.getOperacion() + " rId=" + req.getRequestId());
+        if (!Constantes.HEALTH_CHECK.equals(req.getOperacion())) {
+            LOG.info("[LAMPORT] t=" + relojLamport.get() + " op=" + req.getOperacion()
+                    + " requestId=" + req.getRequestId());
+        }
 
         return switch (req.getOperacion()) {
             case Constantes.HEALTH_CHECK      -> healthCheck(req);
@@ -227,6 +231,8 @@ public class svSesiones {
         MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "svSesiones OK");
         resp.put("puerto", puerto);
         resp.put("writerReady", replicador.isListoParaEscrituras());
+        resp.put("writerActive", replicador.isWriterActivo());
+        resp.put("activeWriter", replicador.getWriterActivoId());
         return resp;
     }
 
@@ -505,8 +511,8 @@ public class svSesiones {
         ReplicadorEstado.Resultado resultado;
         try { resultado = replicador.registrarCambioLocal(bd, requestId); }
         catch (IllegalStateException e) { throw new IOException(e.getMessage(), e); }
-        LOG.info("[REPL] requestId=" + requestId + " version=" + resultado.version()
-                + " confirmada=" + resultado.confirmada());
+        LOG.info("[REPL] lamport=" + relojLamport.tick() + " requestId=" + requestId
+                + " version=" + resultado.version() + " confirmada=" + resultado.confirmada());
         return resultado;
     }
 

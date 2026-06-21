@@ -175,7 +175,7 @@ public class svJuegos {
     /** Inicia el GestorLocks como hilo daemon. */
     private void iniciarGestorLocks() {
         Thread t = new Thread(new GestorLocks(gp, lock,
-                () -> miId == Configuracion.writerNodeId("JUEGOS"),
+                () -> replicador.isListoParaEscrituras(),
                 bd -> guardarReplicadoSinExcepcion(bd, "ttl-" + uuid()),
                 mutex, miId), "gestor-locks");
         t.setDaemon(true);
@@ -217,7 +217,7 @@ public class svJuegos {
             relojLamport.update(req.getLamportClock());
 
             boolean escrituraDurable = Utils.esOperacionEscritura(req.getOperacion())
-                    && miId == Configuracion.writerNodeId("JUEGOS")
+                    && replicador.isWriterActivo()
                     && replicador.isListoParaEscrituras();
             CacheIdempotencia cache = escrituraDurable ? idempotencia : idempotenciaLecturas;
             MensajeProtocolo resp = cache.ejecutar(req, () -> procesar(req));
@@ -239,9 +239,9 @@ public class svJuegos {
     private MensajeProtocolo procesar(MensajeProtocolo req) {
         if (req == null) return MensajeProtocolo.error("?", "INVALID_REQUEST", "Mensaje inválido");
         if (Utils.esOperacionEscritura(req.getOperacion())) {
-            if (miId != Configuracion.writerNodeId("JUEGOS")) {
+            if (!replicador.isWriterActivo()) {
                 return MensajeProtocolo.error(req.getRequestId(), "NOT_PRIMARY",
-                        "Nodo secundario de juegos; escritor=" + Configuracion.writerNodeId("JUEGOS"));
+                        "Nodo secundario de juegos; escritor=" + replicador.getWriterActivoId());
             }
             if (!replicador.isListoParaEscrituras()) {
                 return MensajeProtocolo.error(req.getRequestId(), "SERVICE_UNAVAILABLE",
@@ -293,6 +293,8 @@ public class svJuegos {
         MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "svJuegos OK");
         resp.put("puerto", puerto);
         resp.put("writerReady", replicador.isListoParaEscrituras());
+        resp.put("writerActive", replicador.isWriterActivo());
+        resp.put("activeWriter", replicador.getWriterActivoId());
         return resp;
     }
 
@@ -1005,8 +1007,8 @@ public class svJuegos {
         ReplicadorEstado.Resultado resultado;
         try { resultado = replicador.registrarCambioLocal(bd, requestId); }
         catch (IllegalStateException e) { throw new IOException(e.getMessage(), e); }
-        LOG.info("[REPL] requestId=" + requestId + " version=" + resultado.version()
-                + " confirmada=" + resultado.confirmada());
+        LOG.info("[REPL] lamport=" + relojLamport.tick() + " requestId=" + requestId
+                + " version=" + resultado.version() + " confirmada=" + resultado.confirmada());
         return resultado;
     }
 

@@ -18,15 +18,18 @@ try {
     $failureOut = Join-Path $evidencePath 'falla-coordinador.out.txt'
     $failureErr = Join-Path $evidencePath 'falla-coordinador.err.txt'
     $failureJson = Join-Path $evidencePath 'falla-coordinador.json'
+    $failureStart = Join-Path $evidencePath 'falla-inicio.marker'
+    $failureRecovered = Join-Path $evidencePath 'falla-recuperada.marker'
     $failureArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File',
         (Join-Path $PSScriptRoot 'run_coordinator_failure.ps1'),
-        '-DelaySec',"$FallaEnSeg",'-Salida',$failureJson)
+        '-DelaySec',"$FallaEnSeg",'-Salida',$failureJson,
+        '-MarcadorInicio',$failureStart,'-MarcadorRecuperacion',$failureRecovered)
     $failure = Start-Process -FilePath 'powershell.exe' -ArgumentList $failureArgs `
         -WorkingDirectory $root -WindowStyle Hidden -PassThru `
         -RedirectStandardOutput $failureOut -RedirectStandardError $failureErr
 
     & java -cp "target\classes;lib\gson-2.10.1.jar" com.steam.carga.GeneradorCarga `
-        $Hilos $DuracionSeg (Join-Path $evidencePath 'carga')
+        $Hilos $DuracionSeg (Join-Path $evidencePath 'carga') $failureStart $failureRecovered
     if ($LASTEXITCODE -ne 0) { throw 'La carga termino con error' }
 
     if (-not $failure.WaitForExit(60000)) { Stop-Process -Id $failure.Id -Force; throw 'Timeout del escenario de falla' }

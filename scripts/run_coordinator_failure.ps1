@@ -1,11 +1,14 @@
 param(
     [int]$DelaySec = 0,
-    [string]$Salida = 'evidencia\falla-coordinador.json'
+    [string]$Salida = 'evidencia\falla-coordinador.json',
+    [string]$MarcadorInicio = '',
+    [string]$MarcadorRecuperacion = ''
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'common.ps1')
 Set-Location $SteamRoot
-& java -cp "target\classes;lib\gson-2.10.1.jar" com.steam.carga.FallaInducida $DelaySec $Salida
+& java -cp "target\classes;lib\gson-2.10.1.jar" com.steam.carga.FallaInducida `
+    $DelaySec $Salida $MarcadorInicio $MarcadorRecuperacion
 if ($LASTEXITCODE -ne 0) { throw 'El escenario de coordinador fallo' }
 $salidaPath = if ([IO.Path]::IsPathRooted($Salida)) { $Salida } else { Join-Path $SteamRoot $Salida }
 $estado = Get-Content -Raw $salidaPath | ConvertFrom-Json

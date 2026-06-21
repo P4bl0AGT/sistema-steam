@@ -22,6 +22,8 @@ public final class FallaInducida {
     public static void main(String[] args) throws Exception {
         int espera = args.length > 0 ? Integer.parseInt(args[0]) : 0;
         Path salida = args.length > 1 ? Path.of(args[1]) : Path.of("evidencia", "falla-coordinador.json");
+        Path marcadorInicio = args.length > 2 && !args[2].isBlank() ? Path.of(args[2]) : null;
+        Path marcadorRecuperacion = args.length > 3 && !args[3].isBlank() ? Path.of(args[3]) : null;
         if (espera > 0) Thread.sleep(espera * 1_000L);
         int coordinador = encontrarCoordinador();
         if (coordinador < 1) throw new IllegalStateException("No se pudo determinar coordinador");
@@ -30,6 +32,7 @@ public final class FallaInducida {
         int puertoSobreviviente = sobreviviente == 1 ? Constantes.PUERTO_JUE_1 : Constantes.PUERTO_JUE_2;
 
         long inicio = System.currentTimeMillis();
+        escribirMarcador(marcadorInicio, inicio);
         MensajeProtocolo shutdown = MensajeProtocolo.request(Constantes.SHUTDOWN_GRACEFUL, null);
         shutdown.setEmisor("FallaInducida");
         shutdown.setLamportClock(1L);
@@ -51,6 +54,7 @@ public final class FallaInducida {
             }
         }
         long recuperacionMs = System.currentTimeMillis() - inicio;
+        if (recuperado) escribirMarcador(marcadorRecuperacion, System.currentTimeMillis());
         Map<String, Object> evidencia = new LinkedHashMap<>();
         evidencia.put("fechaUtc", Instant.now().toString());
         evidencia.put("coordinadorCaido", coordinador);
@@ -59,10 +63,19 @@ public final class FallaInducida {
         evidencia.put("recuperado", recuperado);
         evidencia.put("nuevoCoordinador", nuevoCoordinador);
         evidencia.put("recuperacionMs", recuperacionMs);
+        evidencia.put("inicioFallaEpochMs", inicio);
+        evidencia.put("finRecuperacionEpochMs", recuperado ? inicio + recuperacionMs : null);
         Files.createDirectories(salida.toAbsolutePath().getParent());
         Files.writeString(salida, GSON.toJson(evidencia), StandardCharsets.UTF_8);
         System.out.println(GSON.toJson(evidencia));
         if (!recuperado) throw new IllegalStateException("Bully no recupero coordinador en 30s");
+    }
+
+    private static void escribirMarcador(Path marcador, long epochMs) throws Exception {
+        if (marcador == null) return;
+        Path padre = marcador.toAbsolutePath().getParent();
+        if (padre != null) Files.createDirectories(padre);
+        Files.writeString(marcador, Long.toString(epochMs), StandardCharsets.US_ASCII);
     }
 
     private static int encontrarCoordinador() {

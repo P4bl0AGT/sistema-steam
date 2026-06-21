@@ -44,4 +44,4 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'La idempotencia no sobrevivio al reinicio' }
     }
 }
-Write-Host '[OK] Writer caido: lecturas disponibles, escrituras rechazadas y reingreso correcto.' -ForegroundColor Green
+Write-Host '[OK] Writer caido: replica promovida, lecturas/escrituras disponibles y reingreso correcto.' -ForegroundColor Green

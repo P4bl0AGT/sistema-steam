@@ -252,9 +252,10 @@ public class Proxy {
             inicio = Math.floorMod(rr.getAndIncrement(), nodos.size());
         }
         boolean algunoActivo = false;
+        MensajeProtocolo ultimoTransitorio = null;
         for (int i = 0; i < nodos.size(); i++) {
             Nodo nodo = nodos.get((inicio + i) % nodos.size());
-            if (!nodo.activo.get() && !escritura) continue;
+            if (!nodo.activo.get()) continue;
             algunoActivo = true;
             try {
                 req.setEmisor(nombre);
@@ -264,17 +265,27 @@ public class Proxy {
                 MensajeProtocolo resp = reenviar(req, nodo);
                 reloj.update(resp.getLamportClock());
                 if (!nodo.activo.getAndSet(true)) registrarMembresia(nodo, reloj.tick());
+                if (escritura && esRespuestaDeFailover(resp)) {
+                    ultimoTransitorio = resp;
+                    continue;
+                }
                 return resp;
             } catch (Exception e) {
                 nodo.activo.set(false);
                 membresia.marcarCaido(nodo.id);
                 LOG.warning("[PROXY] " + nodo.nombre + " fallo en " + req.getOperacion()
                         + ": " + e.getMessage());
-                if (escritura) break;
             }
         }
+        if (ultimoTransitorio != null) return ultimoTransitorio;
         return error(req.getRequestId(), "SERVICE_UNAVAILABLE",
                 algunoActivo ? "Los nodos activos no respondieron" : "Cluster " + cluster + " sin nodos activos");
+    }
+
+    private static boolean esRespuestaDeFailover(MensajeProtocolo resp) {
+        if (resp == null || resp.isOk()) return false;
+        return "NOT_PRIMARY".equals(resp.getCodigoError())
+                || "SERVICE_UNAVAILABLE".equals(resp.getCodigoError());
     }
 
     private int indiceEscritor(List<Nodo> nodos, String cluster) {

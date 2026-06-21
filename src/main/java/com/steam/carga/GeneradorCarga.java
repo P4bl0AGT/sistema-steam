@@ -22,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.EnumMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
@@ -42,6 +43,8 @@ public final class GeneradorCarga {
     private final int hilos;
     private final int duracionSeg;
     private final Path salida;
+    private final Path marcadorInicioFalla;
+    private final Path marcadorRecuperacion;
     private final LongAdder intentos = new LongAdder();
     private final LongAdder exitos = new LongAdder();
     private final LongAdder erroresNegocio = new LongAdder();
@@ -54,6 +57,7 @@ public final class GeneradorCarga {
     private final Map<String, LongAdder> porCodigoError = new ConcurrentHashMap<>();
     private final Map<Integer, AcumuladorCoordinacion> coordinacionPorNodo = new ConcurrentHashMap<>();
     private final ConcurrentLinkedQueue<Long> latenciasMicros = new ConcurrentLinkedQueue<>();
+    private final Map<Fase, MetricasFase> metricasPorFase = new EnumMap<>(Fase.class);
     private final AtomicLongArray completadasPorSegundo;
     private final RelojLamport relojMetricas = new RelojLamport("carga-metricas");
     private final ScheduledExecutorService muestreador = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -63,11 +67,15 @@ public final class GeneradorCarga {
     });
     private volatile long inicioNanos;
 
-    private GeneradorCarga(int hilos, int duracionSeg, Path salida) {
+    private GeneradorCarga(int hilos, int duracionSeg, Path salida,
+                           Path marcadorInicioFalla, Path marcadorRecuperacion) {
         this.hilos = hilos;
         this.duracionSeg = duracionSeg;
         this.salida = salida;
+        this.marcadorInicioFalla = marcadorInicioFalla;
+        this.marcadorRecuperacion = marcadorRecuperacion;
         this.completadasPorSegundo = new AtomicLongArray(duracionSeg + 2);
+        for (Fase fase : Fase.values()) metricasPorFase.put(fase, new MetricasFase());
     }
 
     public static void main(String[] args) throws Exception {
@@ -75,8 +83,10 @@ public final class GeneradorCarga {
         int duracion = args.length > 1 ? Integer.parseInt(args[1]) : 60;
         Path salida = args.length > 2 ? Path.of(args[2])
                 : Path.of("evidencia", "carga", ID.format(Instant.now()));
+        Path inicioFalla = args.length > 3 && !args[3].isBlank() ? Path.of(args[3]) : null;
+        Path recuperacion = args.length > 4 && !args[4].isBlank() ? Path.of(args[4]) : null;
         if (hilos < 1 || hilos > 500 || duracion < 1) throw new IllegalArgumentException("Parametros invalidos");
-        new GeneradorCarga(hilos, duracion, salida).ejecutar();
+        new GeneradorCarga(hilos, duracion, salida, inicioFalla, recuperacion).ejecutar();
     }
 
     private void ejecutar() throws Exception {
@@ -178,22 +188,33 @@ public final class GeneradorCarga {
     private MensajeProtocolo medir(MensajeProtocolo req, RelojLamport reloj, String emisor) {
         intentos.increment();
         porOperacion.computeIfAbsent(req.getOperacion(), ignored -> new LongAdder()).increment();
+        long inicioEpochMs = System.currentTimeMillis();
         long inicio = System.nanoTime();
         MensajeProtocolo resp = null;
+        boolean respondida = false;
+        boolean exitosa = false;
+        boolean perdida = false;
+        boolean noDisponible = false;
         try {
             resp = ClienteProxy.enviar(req, reloj, emisor);
+            respondida = true;
             respuestas.increment();
             registrarCompletada();
             if (resp.isOk()) {
+                exitosa = true;
                 exitos.increment();
             } else {
                 clasificarError(resp.getCodigoError());
+                noDisponible = esIndisponibilidad(resp.getCodigoError());
             }
         } catch (Exception e) {
+            perdida = true;
             perdidasTransporte.increment();
         } finally {
             long micros = TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - inicio);
             latenciasMicros.add(micros);
+            Fase fase = faseSolicitud(inicioEpochMs, System.currentTimeMillis());
+            metricasPorFase.get(fase).registrar(micros, respondida, exitosa, perdida, noDisponible);
         }
         return resp;
     }
@@ -215,6 +236,24 @@ public final class GeneradorCarga {
                 || "AUTHORIZATION_DENIED".equals(normalizado)) {
             erroresNegocio.increment();
         } else erroresSistema.increment();
+    }
+
+    private static boolean esIndisponibilidad(String codigo) {
+        return codigo != null && (codigo.contains("UNAVAILABLE") || "NOT_PRIMARY".equals(codigo));
+    }
+
+    private Fase faseSolicitud(long inicioEpochMs, long finEpochMs) {
+        long inicioFalla = leerMarcador(marcadorInicioFalla);
+        if (inicioFalla <= 0L || finEpochMs < inicioFalla) return Fase.NORMAL;
+        long recuperacion = leerMarcador(marcadorRecuperacion);
+        if (recuperacion <= 0L || inicioEpochMs <= recuperacion) return Fase.FALLA;
+        return Fase.RECUPERACION;
+    }
+
+    private static long leerMarcador(Path marcador) {
+        if (marcador == null || !Files.exists(marcador)) return 0L;
+        try { return Long.parseLong(Files.readString(marcador, StandardCharsets.US_ASCII).trim()); }
+        catch (Exception ignored) { return 0L; }
     }
 
     private void escribirReporte() throws Exception {
@@ -252,6 +291,9 @@ public final class GeneradorCarga {
         Map<String, Long> codigos = new java.util.TreeMap<>();
         porCodigoError.forEach((k, v) -> codigos.put(k, v.sum()));
         reporte.put("codigosError", codigos);
+        Map<String, Object> fases = new LinkedHashMap<>();
+        for (Fase fase : Fase.values()) fases.put(fase.name().toLowerCase(), metricasPorFase.get(fase).resumen());
+        reporte.put("fases", fases);
         Files.writeString(salida.resolve("reporte-carga.json"), GSON.toJson(reporte), StandardCharsets.UTF_8);
 
         String cabecera = "hilos,duracionSeg,intentos,respuestas,exitos,erroresNegocio,erroresSistema,indisponibilidad,perdidasTransporte,tasaPerdidaPct,throughputExitosSeg,latenciaPromedioMs,latenciaP95Ms,mensajesBully,mensajesMutex,mensajesCoordinacion\n";
@@ -261,6 +303,11 @@ public final class GeneradorCarga {
                 perdidasTransporte.sum(), perdidaPct, exitos.sum() / (double) duracionSeg,
                 promedioMs, p95Ms, coordinacion.bully(), coordinacion.mutex(), coordinacion.total());
         Files.writeString(salida.resolve("resumen.csv"), cabecera + fila, StandardCharsets.UTF_8);
+
+        StringBuilder csvFases = new StringBuilder(
+                "fase,intentos,respuestas,exitos,errores,indisponibilidad,perdidas,tasaErrorPerdidaPct,throughputSeg,latenciaPromedioMs,latenciaP95Ms,duracionObservadaSeg\n");
+        for (Fase fase : Fase.values()) csvFases.append(metricasPorFase.get(fase).csv(fase));
+        Files.writeString(salida.resolve("metricas-por-fase.csv"), csvFases, StandardCharsets.UTF_8);
 
         StringBuilder serie = new StringBuilder("segundo,completadas\n");
         for (int i = 0; i < duracionSeg; i++) serie.append(i + 1).append(',').append(completadasPorSegundo.get(i)).append('\n');
@@ -332,5 +379,79 @@ public final class GeneradorCarga {
                 + "<polyline fill=\"none\" stroke=\"#1769aa\" stroke-width=\"2\" points=\"" + puntos + "\"/>"
                 + "<text x=\"8\" y=\"45\" font-family=\"sans-serif\" font-size=\"12\">" + max + "</text>"
                 + "<text x=\"820\" y=\"305\" font-family=\"sans-serif\" font-size=\"12\">segundos</text></svg>";
+    }
+
+    private enum Fase { NORMAL, FALLA, RECUPERACION }
+
+    private static final class MetricasFase {
+        private final LongAdder intentos = new LongAdder();
+        private final LongAdder respuestas = new LongAdder();
+        private final LongAdder exitos = new LongAdder();
+        private final LongAdder errores = new LongAdder();
+        private final LongAdder indisponibilidad = new LongAdder();
+        private final LongAdder perdidas = new LongAdder();
+        private final ConcurrentLinkedQueue<Long> latencias = new ConcurrentLinkedQueue<>();
+        private final java.util.concurrent.atomic.AtomicLong primero = new java.util.concurrent.atomic.AtomicLong();
+        private final java.util.concurrent.atomic.AtomicLong ultimo = new java.util.concurrent.atomic.AtomicLong();
+
+        private void registrar(long micros, boolean respondida, boolean exitosa,
+                               boolean perdida, boolean noDisponible) {
+            long ahora = System.nanoTime();
+            primero.compareAndSet(0L, ahora);
+            intentos.increment();
+            if (respondida) respuestas.increment();
+            if (exitosa) exitos.increment();
+            else if (respondida) errores.increment();
+            if (perdida) perdidas.increment();
+            if (noDisponible) indisponibilidad.increment();
+            latencias.add(micros);
+            ultimo.set(ahora);
+        }
+
+        private Map<String, Object> resumen() {
+            List<Long> ordenadas = new ArrayList<>(latencias);
+            ordenadas.sort(Comparator.naturalOrder());
+            double duracion = duracionSegundos();
+            long total = intentos.sum();
+            long fallidas = errores.sum() + perdidas.sum();
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("intentos", total);
+            r.put("respuestas", respuestas.sum());
+            r.put("exitos", exitos.sum());
+            r.put("errores", errores.sum());
+            r.put("indisponibilidad", indisponibilidad.sum());
+            r.put("perdidas", perdidas.sum());
+            r.put("tasaErrorPerdidaPct", total == 0 ? 0.0 : 100.0 * fallidas / total);
+            r.put("throughputSeg", respuestas.sum() / duracion);
+            r.put("latenciaPromedioMs", promedio(ordenadas));
+            r.put("latenciaP95Ms", p95(ordenadas));
+            r.put("duracionObservadaSeg", duracion);
+            return r;
+        }
+
+        private String csv(Fase fase) {
+            Map<String, Object> r = resumen();
+            return String.format(java.util.Locale.ROOT,
+                    "%s,%d,%d,%d,%d,%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f%n",
+                    fase.name().toLowerCase(), r.get("intentos"), r.get("respuestas"), r.get("exitos"),
+                    r.get("errores"), r.get("indisponibilidad"), r.get("perdidas"),
+                    r.get("tasaErrorPerdidaPct"), r.get("throughputSeg"),
+                    r.get("latenciaPromedioMs"), r.get("latenciaP95Ms"), r.get("duracionObservadaSeg"));
+        }
+
+        private double duracionSegundos() {
+            long inicio = primero.get(), fin = ultimo.get();
+            return inicio == 0L || fin <= inicio ? 0.001 : Math.max(0.001, (fin - inicio) / 1_000_000_000.0);
+        }
+
+        private static double promedio(List<Long> valores) {
+            return valores.stream().mapToLong(Long::longValue).average().orElse(0.0) / 1_000.0;
+        }
+
+        private static double p95(List<Long> valores) {
+            if (valores.isEmpty()) return 0.0;
+            int indice = Math.min(valores.size() - 1, (int) Math.ceil(valores.size() * 0.95) - 1);
+            return valores.get(indice) / 1_000.0;
+        }
     }
 }

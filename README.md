@@ -23,7 +23,7 @@ El script:
 3. Elimina datos de ejecuciones anteriores.
 4. Inicia 8 JVM y 18 puertos.
 5. Ejecuta las pruebas de integración y concurrencia.
-6. Derriba el writer de juegos y comprueba lecturas sin escrituras en el secundario.
+6. Derriba el writer de juegos, promueve la replica y comprueba lecturas y escrituras.
 7. Detiene todos los procesos al terminar.
 
 Una ejecución correcta termina aproximadamente así:
@@ -34,7 +34,7 @@ OK pruebas_componentes=69
 OK writers_reconciliados=3
 [OK] Sistema iniciado: 8 JVM, 2 proxies, 18 puertos.
 OK pruebas_integracion=20 ultimo_stock_exitos=1
-OK writer_caido=4
+OK writer_failover=4
 OK idempotencia_reinicio_verificada=2
 [OK] Suite completa aprobada.
 [OK] Procesos registrados detenidos.
@@ -236,6 +236,7 @@ Produce:
 
 - `reporte-carga.json`
 - `resumen.csv`
+- `metricas-por-fase.csv` (normal, falla y recuperacion)
 - `throughput-por-segundo.csv`
 - `throughput.svg`
 
@@ -243,15 +244,15 @@ Los archivos quedan bajo `evidencia/carga/<fecha>/`.
 
 ## Consistencia de escrituras
 
-Cada servicio tiene un único escritor configurado (`steam.<servicio>.writer.node`, nodo 1 por defecto). Los proxies envían las escrituras exclusivamente a ese nodo y los secundarios rechazan siempre una escritura directa con `NOT_PRIMARY`. Por defecto, las lecturas también prefieren el writer para conservar read-your-writes; si éste cae, pueden degradar a una réplica con consistencia eventual.
+Cada servicio tiene un escritor preferido configurado (`steam.<servicio>.writer.node`, nodo 1 por defecto). Si deja de responder durante `steam.writer.failover.ms`, el secundario reconciliado se promueve y el Proxy reintenta allí las escrituras con el mismo `requestId`. Por defecto, las lecturas prefieren el writer para conservar read-your-writes y pueden degradar a la replica.
 
-Al arrancar, cada writer permanece sin aceptar escrituras hasta reconciliar su versión con el peer. Los ACK de réplica deben coincidir exactamente en servicio, peer, `requestId` y versión; una versión mayor ya no confirma una escritura anterior. Las versiones incluyen el identificador del writer y el snapshot lleva esa misma versión embebida.
+Al arrancar, el writer permanece sin aceptar escrituras hasta reconciliar su versión con el peer. Los ACK de réplica deben coincidir exactamente en servicio, peer, `requestId` y versión. Las versiones incluyen el identificador del nodo emisor y el snapshot lleva esa misma versión embebida. Cuando vuelve el preferido, el secundario se despromueve y el preferido aplica primero la versión mas reciente.
 
-Esta decisión evita que dos snapshots concurrentes converjan perdiendo una actualización. El costo deliberado es disponibilidad: si el escritor cae, las lecturas continúan desde una réplica, pero las escrituras se rechazan hasta que ese nodo vuelve o se realiza una promoción administrada cambiando la configuración y reiniciando de forma consistente todo el despliegue. La replicación usa snapshots completos versionados; no es consenso ni consistencia fuerte durante fallos.
+La promoción mantiene el servicio disponible ante un crash observable y la replicación converge mediante snapshots completos versionados. No es consenso: con solo dos replicas una partición simétrica no permite garantizar simultáneamente disponibilidad y ausencia absoluta de split-brain.
 
-Juegos y mensajería guardan antes de cada escritura un marcador idempotente local y conservan la respuesta durante 30 días. Si una JVM cae con una operación en curso, el reintento devuelve `REQUEST_OUTCOME_UNKNOWN` en vez de repetir silenciosamente el efecto. Una promoción administrada debe conservar también `IDEMPOTENCIA.json` del writer anterior o comenzar con una frontera explícita de nuevos `requestId`.
+Juegos y mensajería guardan antes de cada escritura un marcador idempotente local y conservan la respuesta durante 30 días. Si una JVM se reinicia con una operación en curso, el reintento devuelve `REQUEST_OUTCOME_UNKNOWN` en vez de repetir silenciosamente el efecto.
 
-Bully recupera al coordinador ante un crash observable. Con sólo dos nodos no puede distinguir un crash de una partición y mantener a la vez disponibilidad y un coordinador único; la protección de los datos frente a ese caso la aporta el writer fijo, no Bully.
+Bully recupera al coordinador ante un crash observable. El failover del writer usa el mismo modelo de falla por timeout; la limitación de particiones de una topología de dos nodos debe explicarse en el informe.
 
 La evidencia compacta validada está en `evidencia/final-50x60-validada/`. La corrida registrada obtuvo:
 
