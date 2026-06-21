@@ -2,11 +2,12 @@ package com.steam.servidores;
 
 import com.steam.common.Constantes;
 import com.steam.common.GestorPersistencia;
+import com.steam.coordinacion.GestorMutexCentralizado;
+import com.steam.coordinacion.MutexTimeoutException;
 import com.steam.models.BDJuegos;
 import com.steam.models.Juego;
 import com.steam.models.Reserva;
 
-import java.io.IOException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
@@ -19,11 +20,11 @@ import java.util.logging.Logger;
  * superó su tiempo de expiración (TTL 5 min), libera el stock
  * automáticamente y notifica en log.
  *
- * CONCURRENCIA: sincroniza sobre el mismo objeto 'lock' que usa svJuegos,
- * garantizando exclusión mutua con las operaciones de compra.
+ * CONCURRENCIA: adquiere primero el mutex distribuido de stock y después el
+ * mismo monitor local de svJuegos, respetando el orden usado por las compras.
  *
  * MODELO DE FALLOS cubierto:
- *  - Fallo de concurrencia: la restauración de stock es atómica (synchronized).
+ *  - Fallo de concurrencia: mutex distribuido más sección local sincronizada.
  *  - Reservas huérfanas (si el cliente se desconecta): el daemon las limpia.
  */
 public class GestorLocks implements Runnable {
@@ -35,20 +36,18 @@ public class GestorLocks implements Runnable {
     private final Object                       lock;
     private final BooleanSupplier              activo;
     private final Consumer<BDJuegos>           guardador;
-
-    public GestorLocks(GestorPersistencia<BDJuegos> gp, Object lock) {
-        this(gp, lock, () -> true, bd -> {
-            try { gp.guardar(bd); }
-            catch (IOException e) { throw new IllegalStateException(e); }
-        });
-    }
+    private final GestorMutexCentralizado       mutex;
+    private final int                           nodoId;
 
     public GestorLocks(GestorPersistencia<BDJuegos> gp, Object lock,
-                       BooleanSupplier activo, Consumer<BDJuegos> guardador) {
+                       BooleanSupplier activo, Consumer<BDJuegos> guardador,
+                       GestorMutexCentralizado mutex, int nodoId) {
         this.gp   = gp;
         this.lock = lock;
         this.activo = activo;
         this.guardador = guardador;
+        this.mutex = mutex;
+        this.nodoId = nodoId;
     }
 
     @Override
@@ -81,7 +80,18 @@ public class GestorLocks implements Runnable {
      */
     private void liberarReservasExpiradas() {
         if (!activo.getAsBoolean()) return;
-        synchronized (lock) {
+        GestorMutexCentralizado.LockHandle lockStock;
+        try {
+            lockStock = mutex.requestLock("stock", nodoId);
+        } catch (MutexTimeoutException e) {
+            LOG.warning("[LOCKS] No se pudo adquirir mutex distribuido: " + e.getMessage());
+            return;
+        }
+        try { synchronized (lock) {
+            if (!mutex.lockVigente(lockStock)) {
+                LOG.warning("[LOCKS] Lease de stock expirado antes de limpiar reservas");
+                return;
+            }
             BDJuegos bd = gp.leer();
             if (bd == null) return;
 
@@ -114,6 +124,8 @@ public class GestorLocks implements Runnable {
                     LOG.severe("[LOCKS] Error guardando tras liberar reservas: " + e.getMessage());
                 }
             }
+        } } finally {
+            mutex.releaseLock(lockStock, nodoId);
         }
     }
 }

@@ -146,7 +146,8 @@ public class svSesiones {
             MensajeProtocolo req = MensajeProtocolo.fromJson(linea);
             String error = SeguridadMensajes.validarSolicitud(req);
             if (error != null) {
-                out.println(MensajeProtocolo.error(req == null ? "?" : req.getRequestId(), error).toJson());
+                out.println(MensajeProtocolo.error(req == null ? "?" : req.getRequestId(),
+                        "SECURITY_ERROR", error).toJson());
                 return;
             }
             relojLamport.update(req.getLamportClock());
@@ -167,7 +168,12 @@ public class svSesiones {
     // ── Dispatcher ────────────────────────────────────────────────────────────
 
     private MensajeProtocolo procesar(MensajeProtocolo req) {
-        if (req == null) return MensajeProtocolo.error("?", "Mensaje inválido");
+        if (req == null) return MensajeProtocolo.error("?", "INVALID_REQUEST", "Mensaje inválido");
+        if (Utils.esOperacionEscritura(req.getOperacion())
+                && nodo != Configuracion.writerNodeId("SESIONES")) {
+            return MensajeProtocolo.error(req.getRequestId(), "NOT_PRIMARY",
+                    "Nodo secundario de sesiones; escritor=" + Configuracion.writerNodeId("SESIONES"));
+        }
 
         // HEALTH_CHECK se logea en FINE para no inundar el log (~6 entradas/min por nodo)
         LOG.log(Constantes.HEALTH_CHECK.equals(req.getOperacion()) ? Level.FINE : Level.INFO,
@@ -182,7 +188,7 @@ public class svSesiones {
             case Constantes.REGISTRAR_USUARIO -> registrarUsuario(req);
             case Constantes.LISTAR_USUARIOS   -> listarUsuarios(req);
             case Constantes.CAMBIAR_PASS      -> cambiarPassword(req);
-            default -> MensajeProtocolo.error(req.getRequestId(),
+            default -> MensajeProtocolo.error(req.getRequestId(), "UNKNOWN_OPERATION",
                     "Operación no soportada: " + req.getOperacion());
         };
     }
@@ -211,19 +217,22 @@ public class svSesiones {
         String password = req.getString("password");
 
         if (username == null || password == null) {
-            return MensajeProtocolo.error(req.getRequestId(), "Faltan credenciales");
+            return MensajeProtocolo.error(req.getRequestId(),
+                    "BUSINESS_INVALID_REQUEST", "Faltan credenciales");
         }
 
         synchronized (lock) {
             BDSesiones bd = gp.leer();
-            if (bd == null) return MensajeProtocolo.error(req.getRequestId(), "BD no disponible");
+            if (bd == null) return MensajeProtocolo.error(req.getRequestId(),
+                    "SERVICE_UNAVAILABLE", "BD no disponible");
 
             Usuario usuario = bd.usuarios.stream()
                     .filter(u -> u.username.equals(username) && u.activo)
                     .findFirst().orElse(null);
 
             if (usuario == null || !Utils.verificarPassword(password, usuario.passwordHash)) {
-                return MensajeProtocolo.error(req.getRequestId(), "Credenciales incorrectas");
+                return MensajeProtocolo.error(req.getRequestId(),
+                        "AUTHENTICATION_FAILED", "Credenciales incorrectas");
             }
 
             // Invalidar sesión anterior si existe
@@ -241,7 +250,8 @@ public class svSesiones {
             try {
                 guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
-                return MensajeProtocolo.error(req.getRequestId(), "Error de persistencia");
+                return MensajeProtocolo.error(req.getRequestId(),
+                        "PERSISTENCE_ERROR", "Error de persistencia");
             }
 
             MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(),
@@ -421,6 +431,9 @@ public class svSesiones {
 
     /** Retorna true si el archivo no existe o tiene tamaño 0. */
     private void guardarReplicado(BDSesiones bd, String requestId) throws IOException {
+        if (nodo != Configuracion.writerNodeId("SESIONES")) {
+            throw new IOException("Escritura rechazada en nodo secundario de sesiones");
+        }
         gp.guardar(bd);
         ReplicadorEstado.Resultado resultado = replicador.registrarCambioLocal(bd, requestId);
         LOG.info("[REPL] requestId=" + requestId + " version=" + resultado.version()

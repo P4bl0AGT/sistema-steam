@@ -2,6 +2,7 @@ package com.steam.tests;
 
 import com.steam.common.ClienteProxy;
 import com.steam.common.Constantes;
+import com.steam.common.Endpoint;
 import com.steam.common.MensajeProtocolo;
 import com.steam.common.RelojLamport;
 
@@ -41,6 +42,23 @@ public final class PruebaIntegracion {
         check(exitos == 1L, "Solo una reserva obtiene el ultimo ejemplar");
         pool.shutdownNow();
 
+        int ganador = compras.get(0).isOk() ? 0 : 1;
+        String tokenGanador = ganador == 0 ? comprador1 : comprador2;
+        MensajeProtocolo cancelar = request(Constantes.CANCELAR_RESERVA, tokenGanador)
+                .put("reservaId", compras.get(ganador).getString("reservaId"));
+        check(enviar(cancelar, "cancelar").isOk(), "Cancelar restaura stock bajo mutex");
+
+        ExecutorService segundaCompra = Executors.newFixedThreadPool(2);
+        CountDownLatch segundoInicio = new CountDownLatch(1);
+        Future<MensajeProtocolo> c = segundaCompra.submit(
+                () -> comprar(segundoInicio, comprador1, juegoId, "c3"));
+        Future<MensajeProtocolo> d = segundaCompra.submit(
+                () -> comprar(segundoInicio, comprador2, juegoId, "c4"));
+        segundoInicio.countDown();
+        check(List.of(c.get(), d.get()).stream().filter(MensajeProtocolo::isOk).count() == 1L,
+                "Stock cancelado se vende una sola vez");
+        segundaCompra.shutdownNow();
+
         MensajeProtocolo saldoInicial = enviar(request(Constantes.VER_SALDO, comprador2), "saldo");
         double antes = saldoInicial.getDouble("saldo");
         MensajeProtocolo recarga = request(Constantes.AGREGAR_SALDO, admin)
@@ -54,6 +72,15 @@ public final class PruebaIntegracion {
         MensajeProtocolo saldoFinal = enviar(request(Constantes.VER_SALDO, comprador2), "saldo");
         check(Math.abs(saldoFinal.getDouble("saldo") - (antes + 7.0)) < 0.001,
                 "requestId duplicado aplica una sola recarga");
+
+        MensajeProtocolo escrituraSecundaria = request(Constantes.AGREGAR_SALDO, admin)
+                .put("targetUser", "cliente3").put("monto", 1.0);
+        escrituraSecundaria.setLamportClock(1L);
+        MensajeProtocolo rechazoSecundario = ClienteProxy.enviarA(escrituraSecundaria,
+                new Endpoint("localhost", Constantes.PUERTO_JUE_2));
+        check(!rechazoSecundario.isOk()
+                        && "NOT_PRIMARY".equals(rechazoSecundario.getCodigoError()),
+                "Nodo secundario rechaza escritura directa");
 
         Thread.sleep(500L);
         check(hash("data/juegos-1/Main.json").equals(hash("data/juegos-2/Main.json")),

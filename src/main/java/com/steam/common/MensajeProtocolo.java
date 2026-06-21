@@ -65,10 +65,16 @@ public class MensajeProtocolo {
 
     /** Crea un RESPONSE de error. */
     public static MensajeProtocolo error(String requestId, String mensaje) {
+        return error(requestId, "UNCLASSIFIED_ERROR", mensaje);
+    }
+
+    /** Crea un RESPONSE de error con una categoría estable para métricas. */
+    public static MensajeProtocolo error(String requestId, String codigoError, String mensaje) {
         MensajeProtocolo m = new MensajeProtocolo();
         m.requestId = requestId;
         m.tipo      = TIPO_RESPONSE;
         m.status    = Constantes.ERROR;
+        m.codigoError = codigoError;
         m.mensaje   = mensaje;
         return m;
     }

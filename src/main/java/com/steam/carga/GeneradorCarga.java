@@ -3,6 +3,7 @@ package com.steam.carga;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.steam.common.ClienteProxy;
+import com.steam.common.Configuracion;
 import com.steam.common.Constantes;
 import com.steam.common.Endpoint;
 import com.steam.common.MensajeProtocolo;
@@ -25,6 +26,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLongArray;
@@ -42,10 +44,21 @@ public final class GeneradorCarga {
     private final LongAdder intentos = new LongAdder();
     private final LongAdder exitos = new LongAdder();
     private final LongAdder erroresNegocio = new LongAdder();
+    private final LongAdder erroresSistema = new LongAdder();
+    private final LongAdder indisponibilidad = new LongAdder();
+    private final LongAdder respuestas = new LongAdder();
     private final LongAdder perdidasTransporte = new LongAdder();
     private final Map<String, LongAdder> porOperacion = new ConcurrentHashMap<>();
+    private final Map<String, LongAdder> porCodigoError = new ConcurrentHashMap<>();
+    private final Map<Integer, AcumuladorCoordinacion> coordinacionPorNodo = new ConcurrentHashMap<>();
     private final ConcurrentLinkedQueue<Long> latenciasMicros = new ConcurrentLinkedQueue<>();
     private final AtomicLongArray completadasPorSegundo;
+    private final RelojLamport relojMetricas = new RelojLamport("carga-metricas");
+    private final ScheduledExecutorService muestreador = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "carga-metricas-coordinacion");
+        t.setDaemon(true);
+        return t;
+    });
     private volatile long inicioNanos;
 
     private GeneradorCarga(int hilos, int duracionSeg, Path salida) {
@@ -67,6 +80,7 @@ public final class GeneradorCarga {
     private void ejecutar() throws Exception {
         Files.createDirectories(salida);
         List<String> juegos = obtenerJuegos();
+        iniciarMuestreoCoordinacion();
         ExecutorService pool = Executors.newFixedThreadPool(hilos);
         CountDownLatch listos = new CountDownLatch(hilos);
         CountDownLatch inicio = new CountDownLatch(1);
@@ -82,6 +96,7 @@ public final class GeneradorCarga {
             pool.shutdownNow();
             throw new IllegalStateException("La carga no termino");
         }
+        detenerMuestreoCoordinacion();
         escribirReporte();
     }
 
@@ -139,19 +154,39 @@ public final class GeneradorCarga {
 
     private void medir(MensajeProtocolo req, RelojLamport reloj, String emisor) {
         intentos.increment();
+        porOperacion.computeIfAbsent(req.getOperacion(), ignored -> new LongAdder()).increment();
         long inicio = System.nanoTime();
         try {
             MensajeProtocolo resp = ClienteProxy.enviar(req, reloj, emisor);
-            if (resp.isOk()) exitos.increment(); else erroresNegocio.increment();
-            porOperacion.computeIfAbsent(req.getOperacion(), ignored -> new LongAdder()).increment();
+            respuestas.increment();
+            registrarCompletada();
+            if (resp.isOk()) {
+                exitos.increment();
+            } else {
+                clasificarError(resp.getCodigoError());
+            }
         } catch (Exception e) {
             perdidasTransporte.increment();
         } finally {
             long micros = TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - inicio);
             latenciasMicros.add(micros);
-            int segundo = (int) TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - inicioNanos);
-            if (segundo >= 0 && segundo < completadasPorSegundo.length()) completadasPorSegundo.incrementAndGet(segundo);
         }
+    }
+
+    private void registrarCompletada() {
+        int segundo = (int) TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - inicioNanos);
+        if (segundo >= 0 && segundo < completadasPorSegundo.length()) {
+            completadasPorSegundo.incrementAndGet(segundo);
+        }
+    }
+
+    private void clasificarError(String codigo) {
+        String normalizado = codigo == null || codigo.isBlank() ? "UNCLASSIFIED_ERROR" : codigo;
+        porCodigoError.computeIfAbsent(normalizado, ignored -> new LongAdder()).increment();
+        if (normalizado.startsWith("BUSINESS_")) erroresNegocio.increment();
+        else if (normalizado.contains("UNAVAILABLE") || "NOT_PRIMARY".equals(normalizado)) {
+            indisponibilidad.increment();
+        } else erroresSistema.increment();
     }
 
     private void escribirReporte() throws Exception {
@@ -160,7 +195,7 @@ public final class GeneradorCarga {
         double promedioMs = latencias.stream().mapToLong(Long::longValue).average().orElse(0.0) / 1_000.0;
         double p95Ms = latencias.isEmpty() ? 0.0
                 : latencias.get(Math.min(latencias.size() - 1, (int) Math.ceil(latencias.size() * 0.95) - 1)) / 1_000.0;
-        long coordinacion = mensajesCoordinacion();
+        AcumuladorCoordinacion.Snapshot coordinacion = mensajesCoordinacion();
         double perdidaPct = intentos.sum() == 0 ? 0.0 : 100.0 * perdidasTransporte.sum() / intentos.sum();
 
         Map<String, Object> reporte = new LinkedHashMap<>();
@@ -170,23 +205,32 @@ public final class GeneradorCarga {
         reporte.put("intentos", intentos.sum());
         reporte.put("exitos", exitos.sum());
         reporte.put("erroresNegocio", erroresNegocio.sum());
+        reporte.put("erroresSistema", erroresSistema.sum());
+        reporte.put("indisponibilidad", indisponibilidad.sum());
+        reporte.put("respuestas", respuestas.sum());
         reporte.put("perdidasTransporte", perdidasTransporte.sum());
         reporte.put("tasaPerdidaPct", perdidaPct);
         reporte.put("throughputExitosSeg", exitos.sum() / (double) duracionSeg);
-        reporte.put("throughputCompletadasSeg", (exitos.sum() + erroresNegocio.sum()) / (double) duracionSeg);
+        reporte.put("throughputCompletadasSeg", respuestas.sum() / (double) duracionSeg);
         reporte.put("latenciaPromedioMs", promedioMs);
         reporte.put("latenciaP95Ms", p95Ms);
-        reporte.put("mensajesCoordinacion", coordinacion);
+        reporte.put("mensajesBully", coordinacion.bully());
+        reporte.put("mensajesMutex", coordinacion.mutex());
+        reporte.put("mensajesCoordinacion", coordinacion.total());
         Map<String, Long> operaciones = new java.util.TreeMap<>();
         porOperacion.forEach((k, v) -> operaciones.put(k, v.sum()));
         reporte.put("operaciones", operaciones);
+        Map<String, Long> codigos = new java.util.TreeMap<>();
+        porCodigoError.forEach((k, v) -> codigos.put(k, v.sum()));
+        reporte.put("codigosError", codigos);
         Files.writeString(salida.resolve("reporte-carga.json"), GSON.toJson(reporte), StandardCharsets.UTF_8);
 
-        String cabecera = "hilos,duracionSeg,intentos,exitos,erroresNegocio,perdidasTransporte,tasaPerdidaPct,throughputExitosSeg,latenciaPromedioMs,latenciaP95Ms,mensajesCoordinacion\n";
-        String fila = String.format(java.util.Locale.ROOT, "%d,%d,%d,%d,%d,%d,%.4f,%.4f,%.4f,%.4f,%d%n",
-                hilos, duracionSeg, intentos.sum(), exitos.sum(), erroresNegocio.sum(),
+        String cabecera = "hilos,duracionSeg,intentos,respuestas,exitos,erroresNegocio,erroresSistema,indisponibilidad,perdidasTransporte,tasaPerdidaPct,throughputExitosSeg,latenciaPromedioMs,latenciaP95Ms,mensajesBully,mensajesMutex,mensajesCoordinacion\n";
+        String fila = String.format(java.util.Locale.ROOT, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%.4f,%.4f,%.4f,%.4f,%d,%d,%d%n",
+                hilos, duracionSeg, intentos.sum(), respuestas.sum(), exitos.sum(), erroresNegocio.sum(),
+                erroresSistema.sum(), indisponibilidad.sum(),
                 perdidasTransporte.sum(), perdidaPct, exitos.sum() / (double) duracionSeg,
-                promedioMs, p95Ms, coordinacion);
+                promedioMs, p95Ms, coordinacion.bully(), coordinacion.mutex(), coordinacion.total());
         Files.writeString(salida.resolve("resumen.csv"), cabecera + fila, StandardCharsets.UTF_8);
 
         StringBuilder serie = new StringBuilder("segundo,completadas\n");
@@ -195,24 +239,51 @@ public final class GeneradorCarga {
         Files.writeString(salida.resolve("throughput.svg"), graficoSvg(), StandardCharsets.UTF_8);
 
         System.out.printf(java.util.Locale.ROOT,
-                "OK CARGA hilos=%d duracion=%ds intentos=%d exitos=%d negocio=%d perdidas=%d perdida=%.3f%% throughput=%.2f/s promedio=%.2fms p95=%.2fms coord=%d%nEVIDENCIA=%s%n",
-                hilos, duracionSeg, intentos.sum(), exitos.sum(), erroresNegocio.sum(),
+                "OK CARGA hilos=%d duracion=%ds intentos=%d exitos=%d negocio=%d sistema=%d indisponibilidad=%d perdidas=%d perdida=%.3f%% throughput=%.2f/s promedio=%.2fms p95=%.2fms coord=%d%nEVIDENCIA=%s%n",
+                hilos, duracionSeg, intentos.sum(), exitos.sum(), erroresNegocio.sum(), erroresSistema.sum(),
+                indisponibilidad.sum(),
                 perdidasTransporte.sum(), perdidaPct, exitos.sum() / (double) duracionSeg,
-                promedioMs, p95Ms, coordinacion, salida.toAbsolutePath());
+                promedioMs, p95Ms, coordinacion.total(), salida.toAbsolutePath());
     }
 
-    private long mensajesCoordinacion() {
-        long total = 0L;
-        for (Endpoint endpoint : List.of(new Endpoint("localhost", Constantes.PUERTO_JUE_1),
-                new Endpoint("localhost", Constantes.PUERTO_JUE_2))) {
+    private void iniciarMuestreoCoordinacion() {
+        muestreador.scheduleWithFixedDelay(this::muestrearCoordinacion, 0, 500, TimeUnit.MILLISECONDS);
+    }
+
+    private void detenerMuestreoCoordinacion() {
+        muestrearCoordinacion();
+        muestreador.shutdownNow();
+    }
+
+    private void muestrearCoordinacion() {
+        Map<Integer, Endpoint> endpoints = Map.of(
+                1, new Endpoint(Configuracion.hostServicio("juegos", 1), Constantes.PUERTO_JUE_1),
+                2, new Endpoint(Configuracion.hostServicio("juegos", 2), Constantes.PUERTO_JUE_2));
+        endpoints.forEach((nodo, endpoint) -> {
             try {
                 MensajeProtocolo req = MensajeProtocolo.request(Constantes.VER_METRICAS_COORD, null);
-                req.setLamportClock(1L);
+                req.setLamportClock(relojMetricas.tick());
                 MensajeProtocolo resp = ClienteProxy.enviarA(req, endpoint);
-                if (resp.isOk()) total += ((Number) resp.get("mensajesCoordinacion")).longValue();
+                relojMetricas.update(resp.getLamportClock());
+                if (resp.isOk()) {
+                    long bully = ((Number) resp.get("mensajesBully")).longValue();
+                    long mutex = ((Number) resp.get("mensajesMutex")).longValue();
+                    coordinacionPorNodo.computeIfAbsent(nodo, ignored -> new AcumuladorCoordinacion())
+                            .observar(bully, mutex);
+                }
             } catch (Exception ignored) {}
+        });
+    }
+
+    private AcumuladorCoordinacion.Snapshot mensajesCoordinacion() {
+        long bully = 0L;
+        long mutex = 0L;
+        for (AcumuladorCoordinacion acumulador : coordinacionPorNodo.values()) {
+            AcumuladorCoordinacion.Snapshot snapshot = acumulador.snapshot();
+            bully += snapshot.bully();
+            mutex += snapshot.mutex();
         }
-        return total;
+        return new AcumuladorCoordinacion.Snapshot(bully, mutex);
     }
 
     private String graficoSvg() {

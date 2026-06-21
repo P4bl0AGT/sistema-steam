@@ -35,6 +35,7 @@ public final class ReplicadorEstado<T> {
 
     private final String servicio;
     private final int nodoId;
+    private final int writerNodeId;
     private final int puertoLocal;
     private final Endpoint peer;
     private final Path archivoVersion;
@@ -62,6 +63,7 @@ public final class ReplicadorEstado<T> {
                             Consumer<T> aplicadorLocal, RelojLamport reloj) {
         this.servicio = servicio;
         this.nodoId = nodoId;
+        this.writerNodeId = Configuracion.writerNodeId(servicio);
         this.puertoLocal = puertoLocal;
         this.peer = peer;
         this.archivoVersion = Path.of(pathVersion);
@@ -93,7 +95,11 @@ public final class ReplicadorEstado<T> {
     }
 
     public Resultado registrarCambioLocal(T estado, String requestId) {
-        long version = (secuencia.incrementAndGet() << 8) | (nodoId & 0xffL);
+        if (nodoId != writerNodeId) {
+            throw new IllegalStateException("Nodo " + nodoId + " no es escritor de " + servicio
+                    + "; escritor configurado=" + writerNodeId);
+        }
+        long version = siguienteVersion(versionActual.get());
         versionActual.set(version);
         persistirVersion(version);
         boolean ack = enviarPush(estado, requestId, version);
@@ -142,6 +148,11 @@ public final class ReplicadorEstado<T> {
                 return;
             }
             if (MensajeReplicacion.PUSH.equals(msg.tipo)) {
+                if (msg.nodoOrigen != writerNodeId) {
+                    out.println(respuesta(MensajeReplicacion.ERROR,
+                            "PUSH rechazado: origen no escritor").toJson());
+                    return;
+                }
                 aplicarSiNueva(msg);
                 MensajeReplicacion ack = respuesta(MensajeReplicacion.ACK, "version=" + versionActual.get());
                 ack.version = versionActual.get();
@@ -156,7 +167,11 @@ public final class ReplicadorEstado<T> {
         }
     }
 
-    private void aplicarSiNueva(MensajeReplicacion msg) {
+    private synchronized void aplicarSiNueva(MensajeReplicacion msg) {
+        if (msg.nodoOrigen != writerNodeId) {
+            LOG.warning("[REPL] Snapshot rechazado de nodo no escritor=" + msg.nodoOrigen);
+            return;
+        }
         long actual = versionActual.get();
         if (msg.version <= actual || msg.payloadJson == null) return;
         T estado = GSON.fromJson(msg.payloadJson, tipo);
@@ -170,6 +185,10 @@ public final class ReplicadorEstado<T> {
 
     private boolean enviarPush(T estado, String requestId, long version) {
         if (estado == null) return false;
+        if (nodoId != writerNodeId) {
+            LOG.warning("[REPL] Nodo secundario intento publicar estado servicio=" + servicio);
+            return false;
+        }
         MensajeReplicacion push = nuevo(MensajeReplicacion.PUSH);
         push.version = version;
         push.requestId = requestId;
@@ -197,9 +216,25 @@ public final class ReplicadorEstado<T> {
         pull.firmar();
         MensajeReplicacion remoto = enviar(pull);
         if (remoto == null || !remoto.firmaValida()) return;
-        if (remoto.version > versionActual.get()) aplicarSiNueva(remoto);
-        else if (versionActual.get() > remoto.version) enviarPush(
-                lectorLocal.get(), "sync-" + UUID.randomUUID(), versionActual.get());
+        long local = versionActual.get();
+        if (nodoId == writerNodeId) {
+            if (local == remoto.version && local != 0L) return;
+            long version = local;
+            if (remoto.version >= local) {
+                version = siguienteVersion(remoto.version);
+                versionActual.set(version);
+                persistirVersion(version);
+            }
+            enviarPush(lectorLocal.get(), "sync-" + UUID.randomUUID(), version);
+        } else if (remoto.nodoOrigen == writerNodeId && remoto.version > local) {
+            aplicarSiNueva(remoto);
+        }
+    }
+
+    private long siguienteVersion(long piso) {
+        long secuenciaMinima = piso >>> 8;
+        long siguiente = secuencia.updateAndGet(actual -> Math.max(actual, secuenciaMinima) + 1L);
+        return (siguiente << 8) | (writerNodeId & 0xffL);
     }
 
     private MensajeReplicacion enviar(MensajeReplicacion msg) throws Exception {

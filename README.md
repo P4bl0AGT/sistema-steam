@@ -28,10 +28,10 @@ El script:
 Una ejecución correcta termina aproximadamente así:
 
 ```text
-OK pruebas_componentes=49
-[OK] Build Java 17: 48 fuentes, 3 pruebas.
+OK pruebas_componentes=55
+[OK] Build Java 17: 49 fuentes, 3 pruebas.
 [OK] Sistema iniciado: 8 JVM, 2 proxies, 18 puertos.
-OK pruebas_integracion=10 ultimo_stock_exitos=1
+OK pruebas_integracion=13 ultimo_stock_exitos=1
 [OK] Suite completa aprobada.
 [OK] Procesos registrados detenidos.
 ```
@@ -156,11 +156,15 @@ La suite comprueba, entre otros puntos:
 - Incrementos concurrentes del reloj de Lamport.
 - Deduplicación concurrente por `requestId`.
 - Firmas HMAC y detección de alteraciones.
+- Integridad del payload completo y SHA-256 para snapshots replicados.
+- Rechazo de escrituras directas en nodos secundarios.
+- Conservación de métricas acumuladas tras reiniciar una JVM.
 - Expiración de sesiones.
 - Orden determinista `(Lamport, nodo, id)`.
 - Login y operaciones a través de proxies redundantes.
 - Replicación byte a byte entre almacenamientos independientes.
 - Dos compradores compitiendo por el último ejemplar: sólo uno puede reservarlo.
+- Cancelación de reserva y restauración de stock bajo el mutex distribuido.
 
 ### Caída de un proxy
 
@@ -192,7 +196,7 @@ También puede ejecutarse directamente:
 .\scripts\run_coordinator_failure.ps1 -DelaySec 0
 ```
 
-La prueba identifica el coordinador, envía un apagado autenticado, mide la reelección del sobreviviente y reinicia el nodo caído. Una corrida validada recuperó coordinador en aproximadamente 5,4 segundos.
+La prueba identifica el coordinador, envía un apagado autenticado, mide la reelección del sobreviviente y reinicia el nodo caído. Las corridas validadas recuperan coordinador en aproximadamente 3,5 segundos.
 
 ## Prueba de carga
 
@@ -214,7 +218,7 @@ Equivale a:
 .\scripts\10_run_generador_carga.ps1 -Hilos 50 -DuracionSeg 60
 ```
 
-El generador realiza login con 50 compradores y mezcla operaciones de catálogo, saldo, mensajes, recepción y reservas a través de ambos proxies. Separa errores de negocio de pérdidas de transporte.
+El generador realiza login con 50 compradores y mezcla operaciones de catálogo, saldo, mensajes, recepción y reservas a través de ambos proxies. Separa éxitos, errores de negocio, errores de sistema, indisponibilidad y pérdidas de transporte mediante `codigoError`. También muestrea periódicamente Bully y mutex para conservar el último contador conocido si un nodo cae o reinicia.
 
 Produce:
 
@@ -225,6 +229,12 @@ Produce:
 
 Los archivos quedan bajo `evidencia/carga/<fecha>/`.
 
+## Consistencia de escrituras
+
+Cada servicio tiene un único escritor configurado (`steam.<servicio>.writer.node`, nodo 1 por defecto). Los proxies envían las escrituras a ese nodo y los secundarios rechazan una escritura directa con `NOT_PRIMARY`. Las lecturas pueden seguir repartiéndose entre réplicas.
+
+Esta decisión evita que dos snapshots concurrentes converjan perdiendo una actualización. El costo deliberado es disponibilidad: si el escritor cae, las lecturas continúan, pero las escrituras se rechazan hasta que ese nodo vuelve o se realiza una promoción administrada cambiando la configuración y reiniciando de forma consistente todo el despliegue.
+
 La evidencia compacta validada está en `evidencia/final-50x60-validada/`. La corrida registrada obtuvo:
 
 | Métrica | Resultado |
@@ -233,11 +243,13 @@ La evidencia compacta validada está en `evidencia/final-50x60-validada/`. La co
 | Duración | 60 s |
 | Intentos | 13.423 |
 | Éxitos | 13.417 |
-| Errores de negocio | 6 |
+| Respuestas no-OK (campo histórico `erroresNegocio`) | 6 |
 | Pérdidas de transporte | 0 |
 | Throughput exitoso | 223,62 solicitudes/s |
 | Latencia promedio | 225,72 ms |
 | Latencia p95 | 1.312,12 ms |
+
+Esa evidencia fue generada antes de incorporar `codigoError` a la clasificación de carga; por ello no permite afirmar que las seis respuestas no-OK fueran realmente rechazos de negocio. Las corridas nuevas exportan categorías separadas y un mapa `codigosError`.
 
 ### Escenario completo de evaluación
 
@@ -275,6 +287,16 @@ java '-Dsteam.config=config/steam-tls.properties' `
 ```
 
 Los `.p12` contienen claves privadas de demostración, están ignorados por Git y deben regenerarse localmente. No uses la contraseña demo ni el secreto HMAC incluido fuera de un entorno académico.
+
+El modo demo permite el secreto publicado sólo cuando `steam.demo.mode=true`. Para cualquier despliegue no demostrativo, define un secreto externo y desactiva el modo demo antes de iniciar todos los procesos:
+
+```powershell
+$env:STEAM_CONTROL_SECRET = '<secreto-aleatorio-largo>'
+$env:STEAM_DEMO_MODE = 'false'
+.\scripts\start_all.ps1 -Config config/steam-tls.properties
+```
+
+Con modo demo desactivado, el sistema no arranca sin `STEAM_CONTROL_SECRET` (o la propiedad JVM equivalente). La firma de control cubre el sobre y el payload canónico completos; Bully, mutex y replicación conservan firmas específicas.
 
 ## Arranque manual por ventanas
 

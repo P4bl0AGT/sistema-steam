@@ -23,7 +23,7 @@ public class MensajeReplicacion {
     private static final Gson GSON = new Gson();
 
     public String contenidoFirmable() {
-        String payloadHash = payloadJson == null ? "-" : Integer.toHexString(payloadJson.hashCode());
+        String payloadHash = payloadJson == null ? "-" : SeguridadMensajes.sha256Texto(payloadJson);
         return tipo + "|" + servicio + "|" + nodoOrigen + "|" + version + "|"
                 + requestId + "|" + lamportClock + "|" + payloadHash;
     }

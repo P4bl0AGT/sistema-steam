@@ -170,8 +170,9 @@ public class svJuegos {
     /** Inicia el GestorLocks como hilo daemon. */
     private void iniciarGestorLocks() {
         Thread t = new Thread(new GestorLocks(gp, lock,
-                () -> miId == 1,
-                bd -> guardarReplicadoSinExcepcion(bd, "ttl-" + uuid())), "gestor-locks");
+                () -> miId == Configuracion.writerNodeId("JUEGOS"),
+                bd -> guardarReplicadoSinExcepcion(bd, "ttl-" + uuid()),
+                mutex, miId), "gestor-locks");
         t.setDaemon(true);
         t.start();
         LOG.info("[JUEGOS] GestorLocks daemon iniciado");
@@ -192,7 +193,8 @@ public class svJuegos {
             MensajeProtocolo req = MensajeProtocolo.fromJson(linea);
             String error = SeguridadMensajes.validarSolicitud(req);
             if (error != null) {
-                out.println(MensajeProtocolo.error(req == null ? "?" : req.getRequestId(), error).toJson());
+                out.println(MensajeProtocolo.error(req == null ? "?" : req.getRequestId(),
+                        "SECURITY_ERROR", error).toJson());
                 return;
             }
             // Evento de recepción: actualizar reloj de Lamport
@@ -215,7 +217,12 @@ public class svJuegos {
     // ── Dispatcher ────────────────────────────────────────────────────────────
 
     private MensajeProtocolo procesar(MensajeProtocolo req) {
-        if (req == null) return MensajeProtocolo.error("?", "Mensaje inválido");
+        if (req == null) return MensajeProtocolo.error("?", "INVALID_REQUEST", "Mensaje inválido");
+        if (Utils.esOperacionEscritura(req.getOperacion())
+                && miId != Configuracion.writerNodeId("JUEGOS")) {
+            return MensajeProtocolo.error(req.getRequestId(), "NOT_PRIMARY",
+                    "Nodo secundario de juegos; escritor=" + Configuracion.writerNodeId("JUEGOS"));
+        }
         // HEALTH_CHECK en FINE; resto en INFO con marca Lamport
         boolean esHC = Constantes.HEALTH_CHECK.equals(req.getOperacion());
         LOG.log(esHC ? java.util.logging.Level.FINE : java.util.logging.Level.INFO,
@@ -243,7 +250,7 @@ public class svJuegos {
             case Constantes.VER_MIS_JUEGOS    -> verMisJuegos(req);
             case Constantes.VER_MIS_RESERVAS  -> verMisReservas(req);
             case Constantes.VER_ESTADISTICAS  -> verEstadisticas(req);
-            default -> MensajeProtocolo.error(req.getRequestId(),
+            default -> MensajeProtocolo.error(req.getRequestId(), "UNKNOWN_OPERATION",
                     "Operación no soportada: " + req.getOperacion());
         };
     }
@@ -298,7 +305,8 @@ public class svJuegos {
 
     private MensajeProtocolo shutdownGraceful(MensajeProtocolo req) {
         if (!SeguridadMensajes.validarControl(req)) {
-            return MensajeProtocolo.error(req.getRequestId(), "Firma de control invalida");
+            return MensajeProtocolo.error(req.getRequestId(), "SECURITY_ERROR",
+                    "Firma de control invalida");
         }
         LOG.warning("[FALLA] t=" + relojLamport.get()
                 + " Nodo " + miId + " recibió SHUTDOWN, cerrando...");
@@ -360,36 +368,42 @@ public class svJuegos {
     private MensajeProtocolo comprarJuego(MensajeProtocolo req) {
         ValidadorToken.ResultadoValidacion auth = autenticar(req);
         if (!auth.valido()) {
-            return MensajeProtocolo.error(req.getRequestId(), "Token inválido: " + auth.mensaje());
+            return MensajeProtocolo.error(req.getRequestId(), "AUTHENTICATION_FAILED",
+                    "Token inválido: " + auth.mensaje());
         }
 
         String juegoId  = req.getString("juegoId");
-        if (juegoId == null) return MensajeProtocolo.error(req.getRequestId(), "Falta juegoId");
+        if (juegoId == null) return MensajeProtocolo.error(req.getRequestId(),
+                "BUSINESS_INVALID_REQUEST", "Falta juegoId");
 
         GestorMutexCentralizado.LockHandle lockStock;
         try { lockStock = mutex.requestLock("stock", miId); }
         catch (MutexTimeoutException e) {
             LOG.warning("[MUTEX] Timeout en COMPRAR_JUEGO: " + e.getMessage());
-            return MensajeProtocolo.error(req.getRequestId(),
+            return MensajeProtocolo.error(req.getRequestId(), "COORDINATOR_UNAVAILABLE",
                     "Coordinador no disponible temporalmente. Reintenta.");
         }
         // ── REGIÓN CRÍTICA: Gestión de Stock Finito ──
         try { synchronized (lock) {
             if (!mutex.lockVigente(lockStock)) {
-                return MensajeProtocolo.error(req.getRequestId(), "La concesion de stock perdio vigencia");
+                return MensajeProtocolo.error(req.getRequestId(), "COORDINATOR_UNAVAILABLE",
+                        "La concesion de stock perdio vigencia");
             }
             BDJuegos bd = gp.leer();
-            if (bd == null) return MensajeProtocolo.error(req.getRequestId(), "BD no disponible");
+            if (bd == null) return MensajeProtocolo.error(req.getRequestId(),
+                    "SERVICE_UNAVAILABLE", "BD no disponible");
 
             Juego juego = bd.catalogo.stream()
                     .filter(j -> j.id.equals(juegoId) && j.activo)
                     .findFirst().orElse(null);
 
             if (juego == null) {
-                return MensajeProtocolo.error(req.getRequestId(), "Juego no encontrado");
+                return MensajeProtocolo.error(req.getRequestId(),
+                        "BUSINESS_NOT_FOUND", "Juego no encontrado");
             }
             if (juego.stock <= 0) {
-                return MensajeProtocolo.error(req.getRequestId(), "Sin stock: Juego no disponible");
+                return MensajeProtocolo.error(req.getRequestId(),
+                        "BUSINESS_NO_STOCK", "Sin stock: Juego no disponible");
             }
 
             // Verificar si el usuario ya tiene una reserva activa para este juego
@@ -397,7 +411,7 @@ public class svJuegos {
                     .anyMatch(r -> r.activa && r.username.equals(auth.username())
                             && r.juegoId.equals(juegoId));
             if (yaReservado) {
-                return MensajeProtocolo.error(req.getRequestId(),
+                return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_CONFLICT",
                         "Ya tienes una reserva activa para este juego");
             }
 
@@ -405,7 +419,8 @@ public class svJuegos {
             boolean yaComprado = bd.ventas.stream()
                     .anyMatch(v -> v.comprador.equals(auth.username()) && v.juegoId.equals(juegoId));
             if (yaComprado) {
-                return MensajeProtocolo.error(req.getRequestId(), "Ya posees este juego");
+                return MensajeProtocolo.error(req.getRequestId(),
+                        "BUSINESS_CONFLICT", "Ya posees este juego");
             }
 
             // Reducir stock y crear reserva
@@ -420,7 +435,8 @@ public class svJuegos {
             } catch (IOException e) {
                 // Rollback en memoria (no llegó a guardarse)
                 juego.stock++;
-                return MensajeProtocolo.error(req.getRequestId(), "Error de persistencia");
+                return MensajeProtocolo.error(req.getRequestId(),
+                        "PERSISTENCE_ERROR", "Error de persistencia");
             }
 
             MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(),
@@ -446,25 +462,29 @@ public class svJuegos {
     private MensajeProtocolo confirmarPago(MensajeProtocolo req) {
         ValidadorToken.ResultadoValidacion auth = autenticar(req);
         if (!auth.valido()) {
-            return MensajeProtocolo.error(req.getRequestId(), "Token inválido: " + auth.mensaje());
+            return MensajeProtocolo.error(req.getRequestId(), "AUTHENTICATION_FAILED",
+                    "Token inválido: " + auth.mensaje());
         }
 
         String reservaId = req.getString("reservaId");
-        if (reservaId == null) return MensajeProtocolo.error(req.getRequestId(), "Falta reservaId");
+        if (reservaId == null) return MensajeProtocolo.error(req.getRequestId(),
+                "BUSINESS_INVALID_REQUEST", "Falta reservaId");
 
         GestorMutexCentralizado.LockHandle lockStock;
         try { lockStock = mutex.requestLock("stock", miId); }
         catch (MutexTimeoutException e) {
-            return MensajeProtocolo.error(req.getRequestId(),
+            return MensajeProtocolo.error(req.getRequestId(), "COORDINATOR_UNAVAILABLE",
                     "Coordinador no disponible. Reintenta.");
         }
         // ── REGIÓN CRÍTICA: Finalización de Venta ──
         try { synchronized (lock) {
             if (!mutex.lockVigente(lockStock)) {
-                return MensajeProtocolo.error(req.getRequestId(), "La concesion de stock perdio vigencia");
+                return MensajeProtocolo.error(req.getRequestId(), "COORDINATOR_UNAVAILABLE",
+                        "La concesion de stock perdio vigencia");
             }
             BDJuegos bd = gp.leer();
-            if (bd == null) return MensajeProtocolo.error(req.getRequestId(), "BD no disponible");
+            if (bd == null) return MensajeProtocolo.error(req.getRequestId(),
+                    "SERVICE_UNAVAILABLE", "BD no disponible");
 
             Reserva reserva = bd.reservas.stream()
                     .filter(r -> r.reservaId.equals(reservaId) && r.activa
@@ -472,7 +492,8 @@ public class svJuegos {
                     .findFirst().orElse(null);
 
             if (reserva == null) {
-                return MensajeProtocolo.error(req.getRequestId(), "Reserva no encontrada");
+                return MensajeProtocolo.error(req.getRequestId(),
+                        "BUSINESS_NOT_FOUND", "Reserva no encontrada");
             }
             if (reserva.expirada()) {
                 reserva.activa = false;
@@ -480,7 +501,7 @@ public class svJuegos {
                 bd.catalogo.stream().filter(j -> j.id.equals(reserva.juegoId))
                         .findFirst().ifPresent(j -> j.stock++);
                 try { guardarReplicado(bd, req.getRequestId()); } catch (IOException ignored) {}
-                return MensajeProtocolo.error(req.getRequestId(),
+                return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_RESERVATION_EXPIRED",
                         "Tiempo agotado. La reserva expiró y el stock fue liberado.");
             }
 
@@ -491,7 +512,7 @@ public class svJuegos {
             // Verificar saldo
             double saldo = bd.billeteras.getOrDefault(auth.username(), 0.0);
             if (saldo < reserva.precio) {
-                return MensajeProtocolo.error(req.getRequestId(),
+                return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_INSUFFICIENT_FUNDS",
                         "Saldo insuficiente. Tienes $" + saldo +
                         ", necesitas $" + reserva.precio);
             }
@@ -519,7 +540,8 @@ public class svJuegos {
             try {
                 guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
-                return MensajeProtocolo.error(req.getRequestId(), "Error de persistencia");
+                return MensajeProtocolo.error(req.getRequestId(),
+                        "PERSISTENCE_ERROR", "Error de persistencia");
             }
 
             MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "Compra Exitosa");
@@ -535,14 +557,27 @@ public class svJuegos {
     /** CANCELAR_RESERVA: el usuario puede cancelar una reserva activa propia. */
     private MensajeProtocolo cancelarReserva(MensajeProtocolo req) {
         ValidadorToken.ResultadoValidacion auth = autenticar(req);
-        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(), auth.mensaje());
+        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(),
+                "AUTHENTICATION_FAILED", auth.mensaje());
 
         String reservaId = req.getString("reservaId");
-        if (reservaId == null) return MensajeProtocolo.error(req.getRequestId(), "Falta reservaId");
+        if (reservaId == null) return MensajeProtocolo.error(req.getRequestId(),
+                "BUSINESS_INVALID_REQUEST", "Falta reservaId");
 
-        synchronized (lock) {
+        GestorMutexCentralizado.LockHandle lockStock;
+        try { lockStock = mutex.requestLock("stock", miId); }
+        catch (MutexTimeoutException e) {
+            return MensajeProtocolo.error(req.getRequestId(), "COORDINATOR_UNAVAILABLE",
+                    "Coordinador no disponible. Reintenta.");
+        }
+        try { synchronized (lock) {
+            if (!mutex.lockVigente(lockStock)) {
+                return MensajeProtocolo.error(req.getRequestId(), "COORDINATOR_UNAVAILABLE",
+                        "La concesion de stock perdio vigencia");
+            }
             BDJuegos bd = gp.leer();
-            if (bd == null) return MensajeProtocolo.error(req.getRequestId(), "BD no disponible");
+            if (bd == null) return MensajeProtocolo.error(req.getRequestId(),
+                    "SERVICE_UNAVAILABLE", "BD no disponible");
 
             Reserva reserva = bd.reservas.stream()
                     .filter(r -> r.reservaId.equals(reservaId) && r.activa
@@ -550,7 +585,8 @@ public class svJuegos {
                     .findFirst().orElse(null);
 
             if (reserva == null) {
-                return MensajeProtocolo.error(req.getRequestId(), "Reserva no encontrada");
+                return MensajeProtocolo.error(req.getRequestId(),
+                        "BUSINESS_NOT_FOUND", "Reserva no encontrada");
             }
 
             reserva.activa = false;
@@ -560,10 +596,13 @@ public class svJuegos {
             try {
                 guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
-                return MensajeProtocolo.error(req.getRequestId(), "Error de persistencia");
+                return MensajeProtocolo.error(req.getRequestId(),
+                        "PERSISTENCE_ERROR", "Error de persistencia");
             }
             return MensajeProtocolo.ok(req.getRequestId(),
                     "Reserva cancelada. Stock de '" + reserva.juegoNombre + "' restaurado.");
+        } } finally {
+            mutex.releaseLock(lockStock, miId);
         }
     }
 
@@ -869,6 +908,9 @@ public class svJuegos {
 
     /** Retorna true si el archivo no existe o tiene tamaño 0. */
     private void guardarReplicado(BDJuegos bd, String requestId) throws IOException {
+        if (miId != Configuracion.writerNodeId("JUEGOS")) {
+            throw new IOException("Escritura rechazada en nodo secundario de juegos");
+        }
         gp.guardar(bd);
         ReplicadorEstado.Resultado resultado = replicador.registrarCambioLocal(bd, requestId);
         LOG.info("[REPL] requestId=" + requestId + " version=" + resultado.version()

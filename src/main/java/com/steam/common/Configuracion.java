@@ -81,7 +81,23 @@ public final class Configuracion {
     public static long tokenTtlMs()       { return getLong("steam.token.ttl.ms", 1_800_000L); }
     public static long mutexLeaseMs()     { return getLong("steam.mutex.lease.ms", 15_000L); }
     public static long replicationIntervalMs(){ return getLong("steam.replication.interval.ms", 5_000L); }
-    public static String controlSecret()  { return get("steam.control.secret", ""); }
+    public static int writerNodeId(String servicio) {
+        return getInt("steam." + servicio.toLowerCase(Locale.ROOT) + ".writer.node", 1);
+    }
+    public static boolean demoMode()      { return getBoolean("steam.demo.mode", false); }
+    public static String controlSecret()  {
+        String system = System.getProperty("steam.control.secret");
+        if (system != null && !system.isBlank()) return system.trim();
+        String environment = System.getenv("STEAM_CONTROL_SECRET");
+        if (environment != null && !environment.isBlank()) return environment.trim();
+        if (!demoMode()) {
+            throw new IllegalStateException(
+                    "STEAM_CONTROL_SECRET es obligatorio cuando steam.demo.mode=false");
+        }
+        String demo = PROPS.getProperty("steam.control.secret", "").trim();
+        if (demo.isBlank()) throw new IllegalStateException("Falta steam.control.secret para el perfil demo");
+        return demo;
+    }
     public static boolean tlsEnabled()    { return getBoolean("steam.tls.enabled", false); }
     public static boolean tlsClientAuth() { return getBoolean("steam.tls.client.auth", false); }
 

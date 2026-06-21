@@ -126,7 +126,8 @@ public class svMensajeria {
             MensajeProtocolo req = MensajeProtocolo.fromJson(linea);
             String error = SeguridadMensajes.validarSolicitud(req);
             if (error != null) {
-                out.println(MensajeProtocolo.error(req == null ? "?" : req.getRequestId(), error).toJson());
+                out.println(MensajeProtocolo.error(req == null ? "?" : req.getRequestId(),
+                        "SECURITY_ERROR", error).toJson());
                 return;
             }
             relojLamport.update(req.getLamportClock());
@@ -147,7 +148,12 @@ public class svMensajeria {
     // ── Dispatcher ────────────────────────────────────────────────────────────
 
     private MensajeProtocolo procesar(MensajeProtocolo req) {
-        if (req == null) return MensajeProtocolo.error("?", "Mensaje inválido");
+        if (req == null) return MensajeProtocolo.error("?", "INVALID_REQUEST", "Mensaje inválido");
+        if (Utils.esOperacionEscritura(req.getOperacion())
+                && nodo != Configuracion.writerNodeId("MENSAJERIA")) {
+            return MensajeProtocolo.error(req.getRequestId(), "NOT_PRIMARY",
+                    "Nodo secundario de mensajeria; escritor=" + Configuracion.writerNodeId("MENSAJERIA"));
+        }
         boolean esHC = Constantes.HEALTH_CHECK.equals(req.getOperacion());
         LOG.log(esHC ? Level.FINE : Level.INFO,
                 "[MSG] op=" + req.getOperacion() + " rId=" + req.getRequestId());
@@ -159,7 +165,7 @@ public class svMensajeria {
             case Constantes.ENVIAR_MENSAJE  -> enviarMensaje(req);
             case Constantes.VER_MENSAJES    -> verMensajes(req);
             case Constantes.VER_CONVERSACION -> verConversacion(req);
-            default -> MensajeProtocolo.error(req.getRequestId(),
+            default -> MensajeProtocolo.error(req.getRequestId(), "UNKNOWN_OPERATION",
                     "Operación no soportada: " + req.getOperacion());
         };
     }
@@ -190,7 +196,7 @@ public class svMensajeria {
         // Validar token del emisor (Seguridad de Canales)
         ValidadorToken.ResultadoValidacion auth = ValidadorToken.validar(req.getToken());
         if (!auth.valido()) {
-            return MensajeProtocolo.error(req.getRequestId(),
+            return MensajeProtocolo.error(req.getRequestId(), "AUTHENTICATION_FAILED",
                     "Token inválido: " + auth.mensaje());
         }
 
@@ -198,11 +204,11 @@ public class svMensajeria {
         String contenido = req.getString("contenido");
 
         if (receptor == null || contenido == null || contenido.isBlank()) {
-            return MensajeProtocolo.error(req.getRequestId(),
+            return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_INVALID_REQUEST",
                     "Faltan campos: receptor, contenido");
         }
         if (receptor.equals(auth.username())) {
-            return MensajeProtocolo.error(req.getRequestId(),
+            return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_INVALID_REQUEST",
                     "No puedes enviarte mensajes a ti mismo");
         }
 
@@ -221,7 +227,8 @@ public class svMensajeria {
             try {
                 guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
-                return MensajeProtocolo.error(req.getRequestId(), "Error de persistencia");
+                return MensajeProtocolo.error(req.getRequestId(),
+                        "PERSISTENCE_ERROR", "Error de persistencia");
             }
 
             MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(),
@@ -243,7 +250,8 @@ public class svMensajeria {
     private MensajeProtocolo verMensajes(MensajeProtocolo req) {
         ValidadorToken.ResultadoValidacion auth = ValidadorToken.validar(req.getToken());
         if (!auth.valido()) {
-            return MensajeProtocolo.error(req.getRequestId(), auth.mensaje());
+            return MensajeProtocolo.error(req.getRequestId(),
+                    "AUTHENTICATION_FAILED", auth.mensaje());
         }
 
         synchronized (lock) {
@@ -262,7 +270,8 @@ public class svMensajeria {
                 try {
                     guardarReplicado(bd, req.getRequestId());
                 } catch (IOException e) {
-                    LOG.warning("[MSG] Error guardando ACKs: " + e.getMessage());
+                    return MensajeProtocolo.error(req.getRequestId(),
+                            "PERSISTENCE_ERROR", "No se pudo persistir la entrega");
                 }
             }
 
@@ -289,12 +298,14 @@ public class svMensajeria {
     private MensajeProtocolo verConversacion(MensajeProtocolo req) {
         ValidadorToken.ResultadoValidacion auth = ValidadorToken.validar(req.getToken());
         if (!auth.valido()) {
-            return MensajeProtocolo.error(req.getRequestId(), auth.mensaje());
+            return MensajeProtocolo.error(req.getRequestId(),
+                    "AUTHENTICATION_FAILED", auth.mensaje());
         }
 
         String conUsuario = req.getString("conUsuario");
         if (conUsuario == null) {
-            return MensajeProtocolo.error(req.getRequestId(), "Falta campo: conUsuario");
+            return MensajeProtocolo.error(req.getRequestId(),
+                    "BUSINESS_INVALID_REQUEST", "Falta campo: conUsuario");
         }
 
         synchronized (lock) {
@@ -327,6 +338,9 @@ public class svMensajeria {
         }
     }
     private void guardarReplicado(BDMensajeria bd, String requestId) throws IOException {
+        if (nodo != Configuracion.writerNodeId("MENSAJERIA")) {
+            throw new IOException("Escritura rechazada en nodo secundario de mensajeria");
+        }
         gp.guardar(bd);
         ReplicadorEstado.Resultado resultado = replicador.registrarCambioLocal(bd, requestId);
         LOG.info("[REPL] requestId=" + requestId + " version=" + resultado.version()

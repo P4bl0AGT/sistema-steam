@@ -31,6 +31,7 @@ public final class FallaInducida {
 
         long inicio = System.currentTimeMillis();
         MensajeProtocolo shutdown = MensajeProtocolo.request(Constantes.SHUTDOWN_GRACEFUL, null);
+        shutdown.setEmisor("FallaInducida");
         shutdown.setLamportClock(1L);
         SeguridadMensajes.firmarControl(shutdown);
         MensajeProtocolo ack = enviar(shutdown, puertoCaido);
@@ -76,7 +77,7 @@ public final class FallaInducida {
 
     private static MensajeProtocolo enviar(MensajeProtocolo req, int puerto) {
         try {
-            req.setEmisor("FallaInducida");
+            if (req.getEmisor() == null) req.setEmisor("FallaInducida");
             if (req.getLamportClock() == 0L) req.setLamportClock(1L);
             return ClienteProxy.enviarA(req, new Endpoint("localhost", puerto));
         } catch (Exception e) { return null; }

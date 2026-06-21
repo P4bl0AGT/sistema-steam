@@ -225,8 +225,13 @@ public class Proxy {
         if (nodos == null) return error(req.getRequestId(), "UNKNOWN_OPERATION",
                 "Operacion desconocida: " + req.getOperacion());
         AtomicInteger rr = contador(cluster);
-        int inicio = Utils.esOperacionEscritura(req.getOperacion())
-                ? indicePrimario(nodos) : Math.floorMod(rr.getAndIncrement(), nodos.size());
+        boolean escritura = Utils.esOperacionEscritura(req.getOperacion());
+        int inicio = escritura ? indiceEscritor(nodos, cluster)
+                : Math.floorMod(rr.getAndIncrement(), nodos.size());
+        if (inicio < 0 || (escritura && !nodos.get(inicio).activo.get())) {
+            return error(req.getRequestId(), "SERVICE_UNAVAILABLE",
+                    "Escritor configurado de " + cluster + " no disponible");
+        }
         boolean algunoActivo = false;
         for (int i = 0; i < nodos.size(); i++) {
             Nodo nodo = nodos.get((inicio + i) % nodos.size());
@@ -244,20 +249,20 @@ public class Proxy {
                 membresia.marcarCaido(nodo.id);
                 LOG.warning("[PROXY] " + nodo.nombre + " fallo en " + req.getOperacion()
                         + ": " + e.getMessage());
+                if (escritura) break;
             }
         }
         return error(req.getRequestId(), "SERVICE_UNAVAILABLE",
                 algunoActivo ? "Los nodos activos no respondieron" : "Cluster " + cluster + " sin nodos activos");
     }
 
-    private int indicePrimario(List<Nodo> nodos) {
-        int mejor = 0;
-        int mejorId = Integer.MAX_VALUE;
+    private int indiceEscritor(List<Nodo> nodos, String cluster) {
+        int writerNodeId = Configuracion.writerNodeId(cluster);
         for (int i = 0; i < nodos.size(); i++) {
             Nodo n = nodos.get(i);
-            if (n.activo.get() && n.nodoId < mejorId) { mejor = i; mejorId = n.nodoId; }
+            if (n.nodoId == writerNodeId) return i;
         }
-        return mejor;
+        return -1;
     }
 
     private MensajeProtocolo reenviar(MensajeProtocolo req, Nodo nodo) throws Exception {
