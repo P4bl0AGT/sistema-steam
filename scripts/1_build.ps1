@@ -6,6 +6,7 @@ $gson = Join-Path $root 'lib\gson-2.10.1.jar'
 $classes = Join-Path $root 'target\classes'
 $testClasses = Join-Path $root 'target\test-classes'
 $jarFile = Join-Path $root 'sistema-steam.jar'
+$gsonSha256 = '4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593'
 Set-Location $root
 
 if (-not (Get-Command java -ErrorAction SilentlyContinue) -or
@@ -15,6 +16,10 @@ if (-not (Get-Command java -ErrorAction SilentlyContinue) -or
 if (-not (Test-Path $gson)) {
     New-Item -ItemType Directory -Force (Split-Path $gson) | Out-Null
     Invoke-WebRequest 'https://repo1.maven.org/maven2/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar' -OutFile $gson
+}
+$hashActual = (Get-FileHash $gson -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($hashActual -ne $gsonSha256) {
+    throw "Gson 2.10.1 no coincide con el SHA-256 esperado: $hashActual"
 }
 
 foreach ($dir in @($classes, $testClasses)) {
@@ -42,13 +47,24 @@ Invoke-Javac $mainSources $classes $gson
 $testSources = @(Get-ChildItem 'src\test\java' -Recurse -Filter '*.java' -ErrorAction SilentlyContinue | ForEach-Object FullName)
 Invoke-Javac $testSources $testClasses "$classes;$gson"
 
-$jdkCandidates = @()
-if ($env:JAVA_HOME) { $jdkCandidates += $env:JAVA_HOME }
-$jdkCandidates += @(Get-ChildItem (Join-Path $env:ProgramFiles 'Java') -Directory -Filter 'jdk*' -ErrorAction SilentlyContinue |
-        Sort-Object Name -Descending | ForEach-Object FullName)
-$javaHome = $jdkCandidates | Where-Object { Test-Path (Join-Path $_ 'bin\jar.exe') } | Select-Object -First 1
-if (-not $javaHome) { throw 'No se encontro un JDK completo con jar.exe' }
-$jarExe = Join-Path $javaHome 'bin\jar.exe'
+$jarCommand = Get-Command jar.exe -ErrorAction SilentlyContinue
+$jarExe = if ($jarCommand) { $jarCommand.Source } else { $null }
+if (-not $jarExe) {
+    $javacCommand = Get-Command javac.exe -ErrorAction SilentlyContinue
+    if ($javacCommand) {
+        $sibling = Join-Path (Split-Path $javacCommand.Source) 'jar.exe'
+        if (Test-Path $sibling) { $jarExe = $sibling }
+    }
+}
+if (-not $jarExe) {
+    $jdkCandidates = @()
+    if ($env:JAVA_HOME) { $jdkCandidates += $env:JAVA_HOME }
+    $jdkCandidates += @(Get-ChildItem (Join-Path $env:ProgramFiles 'Java') -Directory -Filter 'jdk*' -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending | ForEach-Object FullName)
+    $javaHome = $jdkCandidates | Where-Object { Test-Path (Join-Path $_ 'bin\jar.exe') } | Select-Object -First 1
+    if ($javaHome) { $jarExe = Join-Path $javaHome 'bin\jar.exe' }
+}
+if (-not $jarExe) { throw 'No se encontro un JDK completo con jar.exe' }
 if (Test-Path $jarFile) { Remove-Item -LiteralPath $jarFile -Force }
 & $jarExe --create --file $jarFile -C $classes .
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $jarFile)) { throw 'No se pudo crear sistema-steam.jar' }

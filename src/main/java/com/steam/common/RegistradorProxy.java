@@ -23,7 +23,7 @@ public final class RegistradorProxy {
                                       int puertoBully, int puertoMutex, int puertoReplicacion) {
         Runnable tarea = () -> registrarEnTodos(cluster, nodoId, puerto, nombre,
                 puertoBully, puertoMutex, puertoReplicacion);
-        SCHED.scheduleAtFixedRate(tarea, 0, 15, TimeUnit.SECONDS);
+        SCHED.scheduleWithFixedDelay(tarea, 0, 2, TimeUnit.SECONDS);
     }
 
     /** Compatibilidad con servidores sin canales adicionales. */

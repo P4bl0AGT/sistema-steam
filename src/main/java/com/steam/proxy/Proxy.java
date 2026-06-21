@@ -64,7 +64,7 @@ public class Proxy {
     private final AtomicInteger rrSesiones = new AtomicInteger();
     private final AtomicInteger rrJuegos = new AtomicInteger();
     private final AtomicInteger rrMensajeria = new AtomicInteger();
-    private final ExecutorService pool = Executors.newFixedThreadPool(Constantes.POOL_SIZE);
+    private final ExecutorService pool = Ejecutores.acotado("proxy-worker", Constantes.POOL_SIZE, false);
 
     public Proxy(int proxyId, int puerto) {
         this.proxyId = proxyId;
@@ -93,6 +93,7 @@ public class Proxy {
     }
 
     public static void main(String[] args) {
+        Configuracion.validarArranque();
         int id = args.length > 0 ? Integer.parseInt(args[0]) : 1;
         int defaultPort = id == 2 ? Constantes.PUERTO_PROXY_2 : Constantes.PUERTO_PROXY;
         int port = args.length > 1 ? Integer.parseInt(args[1]) : defaultPort;
@@ -107,7 +108,7 @@ public class Proxy {
                 + " tls=" + Configuracion.tlsEnabled());
         try (ServerSocket server = Transporte.servidor(puerto)) {
             while (!Thread.currentThread().isInterrupted()) {
-                Socket cliente = server.accept();
+                Socket cliente = Transporte.aceptar(server);
                 pool.submit(() -> manejarCliente(cliente));
             }
         } catch (Exception e) {
@@ -123,7 +124,12 @@ public class Proxy {
                      cliente.getInputStream(), StandardCharsets.UTF_8));
              PrintWriter out = new PrintWriter(new OutputStreamWriter(
                      cliente.getOutputStream(), StandardCharsets.UTF_8), true)) {
-            String linea = LineaJson.leer(in);
+            String linea;
+            try { linea = LineaJson.leer(in); }
+            catch (LineaJson.MensajeDemasiadoGrandeException e) {
+                out.println(error("?", "MESSAGE_TOO_LARGE", e.getMessage()).toJson());
+                return;
+            }
             if (linea == null || linea.isBlank()) return;
             MensajeProtocolo req;
             try { req = MensajeProtocolo.fromJson(linea); }
@@ -139,7 +145,7 @@ public class Proxy {
             }
 
             long recibido = reloj.update(req.getLamportClock());
-            MensajeProtocolo resp = idempotencia.ejecutar(req.getRequestId(), () -> procesar(req));
+            MensajeProtocolo resp = idempotencia.ejecutar(req, () -> procesar(req));
             resp.setLamportClock(reloj.tick());
             resp.setEmisor(nombre);
             resp.setReceptor(req.getEmisor());
@@ -220,21 +226,27 @@ public class Proxy {
     }
 
     private MensajeProtocolo rutear(MensajeProtocolo req) {
+        boolean control = Utils.esOperacionControl(req.getOperacion());
+        if (control && !SeguridadMensajes.validarControl(req)) {
+            return error(req.getRequestId(), "UNAUTHORIZED", "Firma de control invalida");
+        }
         String cluster = Utils.clusterParaOperacion(req.getOperacion());
         List<Nodo> nodos = obtenerCluster(cluster);
         if (nodos == null) return error(req.getRequestId(), "UNKNOWN_OPERATION",
                 "Operacion desconocida: " + req.getOperacion());
         AtomicInteger rr = contador(cluster);
         boolean escritura = Utils.esOperacionEscritura(req.getOperacion());
+        boolean preferirWriter = escritura
+                || Configuracion.getBoolean("steam.reads.prefer.writer", true);
         int inicio;
-        boolean failoverEscritura = false;
-        if (escritura) {
+        if (preferirWriter) {
             inicio = indiceEscritor(nodos, cluster);
-            if (inicio < 0 || !nodos.get(inicio).activo.get()) {
+            if (inicio < 0) {
+                return error(req.getRequestId(), "SERVICE_UNAVAILABLE",
+                        "Writer de " + cluster + " no configurado");
+            }
+            if (!escritura && !nodos.get(inicio).activo.get()) {
                 inicio = Math.floorMod(rr.getAndIncrement(), nodos.size());
-                failoverEscritura = true;
-                LOG.warning("[PROXY] Escritor de " + cluster
-                        + " no disponible; failover a nodo activo");
             }
         } else {
             inicio = Math.floorMod(rr.getAndIncrement(), nodos.size());
@@ -242,21 +254,23 @@ public class Proxy {
         boolean algunoActivo = false;
         for (int i = 0; i < nodos.size(); i++) {
             Nodo nodo = nodos.get((inicio + i) % nodos.size());
-            if (!nodo.activo.get()) continue;
+            if (!nodo.activo.get() && !escritura) continue;
             algunoActivo = true;
             try {
                 req.setEmisor(nombre);
                 req.setReceptor(nodo.nombre);
                 req.setLamportClock(reloj.tick());
+                if (control) SeguridadMensajes.firmarControl(req);
                 MensajeProtocolo resp = reenviar(req, nodo);
                 reloj.update(resp.getLamportClock());
+                if (!nodo.activo.getAndSet(true)) registrarMembresia(nodo, reloj.tick());
                 return resp;
             } catch (Exception e) {
                 nodo.activo.set(false);
                 membresia.marcarCaido(nodo.id);
                 LOG.warning("[PROXY] " + nodo.nombre + " fallo en " + req.getOperacion()
                         + ": " + e.getMessage());
-                if (escritura && !failoverEscritura) break;
+                if (escritura) break;
             }
         }
         return error(req.getRequestId(), "SERVICE_UNAVAILABLE",
@@ -320,6 +334,14 @@ public class Proxy {
         List<Nodo> lista = obtenerCluster(candidato.cluster);
         Nodo existente = lista.stream().filter(n -> n.id.equals(candidato.id)).findFirst().orElse(null);
         if (existente != null) return existente;
+        Nodo anterior = lista.stream()
+                .filter(n -> n.nodoId == candidato.nodoId || n.nombre.equals(candidato.nombre))
+                .findFirst().orElse(null);
+        if (anterior != null) {
+            anterior.activo.set(false);
+            membresia.marcarCaido(anterior.id);
+            lista.remove(anterior);
+        }
         lista.add(candidato);
         return candidato;
     }

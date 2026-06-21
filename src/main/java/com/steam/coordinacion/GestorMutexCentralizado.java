@@ -4,6 +4,8 @@ import com.steam.common.Configuracion;
 import com.steam.common.LineaJson;
 import com.steam.common.RelojLamport;
 import com.steam.common.Transporte;
+import com.steam.common.Ejecutores;
+import com.steam.common.SeguridadMensajes;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -79,11 +81,8 @@ public final class GestorMutexCentralizado {
     private final Map<String, EstadoLock> locks = new ConcurrentHashMap<>();
     private final AtomicBoolean stopped = new AtomicBoolean();
     private final AtomicLong mensajesEnviados = new AtomicLong();
-    private final ExecutorService pool = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "mutex-worker-" + miIdSeguro());
-        t.setDaemon(true);
-        return t;
-    });
+    private final ExecutorService pool = Ejecutores.acotado(
+            "mutex-worker-" + miIdSeguro(), 16, true);
     private volatile ServerSocket serverSocket;
 
     public GestorMutexCentralizado(int miId, int miPuertoMutex, GestorBully bully,
@@ -141,7 +140,7 @@ public final class GestorMutexCentralizado {
             LOG.info("[MUTEX] nodo=" + miId + " puerto=" + miPuertoMutex);
             while (!stopped.get()) {
                 try {
-                    Socket socket = server.accept();
+                    Socket socket = Transporte.aceptar(server);
                     pool.submit(() -> manejar(socket));
                 } catch (IOException e) {
                     if (!stopped.get()) LOG.warning("[MUTEX] accept: " + e.getMessage());
@@ -160,7 +159,10 @@ public final class GestorMutexCentralizado {
                      socket.getOutputStream(), StandardCharsets.UTF_8), true)) {
             String line = LineaJson.leer(in, Configuracion.maxMessageBytes());
             MensajeMutex req = line == null ? null : MensajeMutex.fromJson(line);
-            if (req == null || !req.firmaValida()) {
+            if (req == null || !req.firmaValida() || !req.esFresco()
+                    || req.coordinadorId != miId || !nodoConocido(req.solicitanteId)
+                    || !SeguridadMensajes.aceptarUnaVez("mutex-" + miId,
+                    req.tipo + "|" + req.solicitanteId + "|" + req.requestId, req.timestamp)) {
                 out.println(respuesta(MensajeMutex.DENIED, req, 0L).toJson());
                 return;
             }
@@ -210,7 +212,12 @@ public final class GestorMutexCentralizado {
             mensajesEnviados.incrementAndGet();
             String line = LineaJson.leer(in, Configuracion.maxMessageBytes());
             MensajeMutex resp = line == null ? null : MensajeMutex.fromJson(line);
-            if (resp == null || !resp.firmaValida()) throw new IOException("Respuesta sin firma valida");
+            if (resp == null || !resp.firmaValida() || !resp.esFresco()
+                    || resp.coordinadorId != coordinador
+                    || resp.solicitanteId != req.solicitanteId
+                    || !java.util.Objects.equals(resp.requestId, req.requestId)
+                    || !java.util.Objects.equals(resp.recurso, req.recurso))
+                throw new IOException("Respuesta sin firma valida o expirada");
             reloj.update(resp.lamportClock);
             return resp;
         } catch (IOException e) {
@@ -223,6 +230,10 @@ public final class GestorMutexCentralizado {
         if (id == miId) return new NodoInfo(miId, Configuracion.advertisedHost(), 0, miPuertoMutex);
         return peers.stream().filter(p -> p.id == id).findFirst()
                 .orElseThrow(() -> new MutexTimeoutException("Nodo coordinador desconocido: " + id));
+    }
+
+    private boolean nodoConocido(int id) {
+        return id == miId || peers.stream().anyMatch(p -> p.id == id);
     }
 
     private MensajeMutex mensaje(String tipo, int solicitante, int coordinador,

@@ -1,5 +1,9 @@
 # Analisis completo del Sistema Steam Distribuido
 
+> **Documento historico.** Describe el commit `f5ee219` anterior a la
+> implementacion actual. Para operar y evaluar el sistema use `README.md` y las
+> fuentes vigentes; las cifras de 35 clases y ausencia de pruebas ya no aplican.
+
 > Revision del repositorio `P4bl0AGT/sistema-steam`, rama `main`, commit local
 > `f5ee219cea4dcc3e6179b68a5f5ec4cff820e0e7` (20-06-2026).
 >

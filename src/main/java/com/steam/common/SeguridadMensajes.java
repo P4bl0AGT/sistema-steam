@@ -13,11 +13,13 @@ import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** Validaciones de frescura y autenticacion de operaciones de control. */
 public final class SeguridadMensajes {
     private static final String CAMPO_FIRMA = "_controlProof";
     private static final Gson GSON = new Gson();
+    private static final ConcurrentHashMap<String, Long> MENSAJES_VISTOS = new ConcurrentHashMap<>();
 
     private SeguridadMensajes() {}
 
@@ -26,9 +28,13 @@ public final class SeguridadMensajes {
         if (!MensajeProtocolo.TIPO_REQUEST.equals(req.getTipo())) return "Tipo debe ser REQUEST";
         if (req.getRequestId() == null || req.getRequestId().isBlank()) return "requestId requerido";
         if (req.getOperacion() == null || req.getOperacion().isBlank()) return "operacion requerida";
-        long edad = System.currentTimeMillis() - req.getTimestamp();
-        if (edad < -5_000L || edad > Configuracion.requestMaxAgeMs()) return "Solicitud fuera de ventana temporal";
+        if (!esTimestampFresco(req.getTimestamp())) return "Solicitud fuera de ventana temporal";
         return null;
+    }
+
+    public static boolean esTimestampFresco(long timestamp) {
+        long edad = System.currentTimeMillis() - timestamp;
+        return edad >= -5_000L && edad <= Configuracion.requestMaxAgeMs();
     }
 
     public static void firmarControl(MensajeProtocolo req) {
@@ -40,8 +46,18 @@ public final class SeguridadMensajes {
         String secret = Configuracion.controlSecret();
         if (recibida == null || secret.isBlank()) return false;
         String esperada = hmac(baseFirma(req), secret);
-        return MessageDigest.isEqual(recibida.getBytes(StandardCharsets.US_ASCII),
+        boolean valida = MessageDigest.isEqual(recibida.getBytes(StandardCharsets.US_ASCII),
                 esperada.getBytes(StandardCharsets.US_ASCII));
+        if (!valida || req.getRequestId() == null) return false;
+        return aceptarUnaVez("control", req.getRequestId(), req.getTimestamp());
+    }
+
+    /** Rechaza la repeticion exacta de un mensaje autenticado dentro de su ventana temporal. */
+    public static boolean aceptarUnaVez(String canal, String id, long timestamp) {
+        if (canal == null || id == null || id.isBlank() || !esTimestampFresco(timestamp)) return false;
+        long ahora = System.currentTimeMillis();
+        MENSAJES_VISTOS.entrySet().removeIf(e -> ahora - e.getValue() > Configuracion.requestMaxAgeMs());
+        return MENSAJES_VISTOS.putIfAbsent(canal + "|" + id, ahora) == null;
     }
 
     private static String baseFirma(MensajeProtocolo req) {
@@ -60,6 +76,13 @@ public final class SeguridadMensajes {
         Map<String, Object> clean = new TreeMap<>(source);
         clean.remove(CAMPO_FIRMA);
         return canonicalizar(GSON.toJsonTree(clean));
+    }
+
+    /** Huella estable del efecto de negocio, independiente del salto de red. */
+    public static String huellaSolicitud(MensajeProtocolo req) {
+        if (req == null) return sha256Texto("null");
+        return sha256Texto(valor(req.getOperacion()) + "|" + valor(req.getToken()) + "|"
+                + payloadCanonico(req));
     }
 
     private static String canonicalizar(JsonElement element) {

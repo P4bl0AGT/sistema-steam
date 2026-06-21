@@ -18,7 +18,7 @@ echo.
 dir /b logs\*.log 2>nul || echo   (ninguno encontrado)
 echo.
 echo Elige que log ver:
-echo   1. Proxy
+echo   1. Proxy 1
 echo   2. svSesiones Nodo 1
 echo   3. svSesiones Nodo 2
 echo   4. svJuegos   Nodo 1
@@ -41,7 +41,7 @@ if "%op%"=="8" goto todos
 goto fin
 
 :proxy
-powershell -Command "Get-Content 'logs\Proxy_0.log' -Tail 50 -Wait"
+powershell -Command "Get-Content 'logs\Proxy-1_0.log' -Tail 50 -Wait"
 goto fin
 :ses1
 powershell -Command "Get-Content 'logs\svSesiones-1_0.log' -Tail 50 -Wait"
@@ -65,7 +65,7 @@ goto fin
 :todos
 echo.
 echo ===== PROXY =====
-powershell -Command "if(Test-Path 'logs\Proxy_0.log'){Get-Content 'logs\Proxy_0.log' -Tail 10}else{Write-Host '(sin log)'}"
+powershell -Command "if(Test-Path 'logs\Proxy-1_0.log'){Get-Content 'logs\Proxy-1_0.log' -Tail 10}else{Write-Host '(sin log)'}"
 echo.
 echo ===== svSesiones-1 =====
 powershell -Command "if(Test-Path 'logs\svSesiones-1_0.log'){Get-Content 'logs\svSesiones-1_0.log' -Tail 10}else{Write-Host '(sin log)'}"

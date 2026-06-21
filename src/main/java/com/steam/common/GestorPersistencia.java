@@ -25,11 +25,8 @@ public class GestorPersistencia<T> {
 
     /**
      * Sufijo único POR PROCESO para los archivos temporales.
-     * Dos nodos (JVMs distintas) que comparten el mismo Main NO deben usar el
-     * mismo .tmp: si ambos escriben a la vez sobre "Main.tmp" se corrompen el
-     * temporal mutuamente y luego promueven JSON inválido (MalformedJsonException).
-     * Con un sufijo por PID, cada proceso escribe su propio temporal y el
-     * rename atómico deja Main siempre como un JSON completo y válido.
+     * El sufijo por PID evita colisiones con otra instancia iniciada por error
+     * sobre la misma ruta y permite promover siempre un JSON completo.
      */
     private static final String TMP_SUFIJO = "." + ProcessHandle.current().pid() + ".tmp";
 

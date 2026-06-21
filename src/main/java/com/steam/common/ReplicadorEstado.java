@@ -36,6 +36,7 @@ public final class ReplicadorEstado<T> {
     private final String servicio;
     private final int nodoId;
     private final int writerNodeId;
+    private final int peerNodeId;
     private final int puertoLocal;
     private final Endpoint peer;
     private final Path archivoVersion;
@@ -46,12 +47,10 @@ public final class ReplicadorEstado<T> {
     private final AtomicLong secuencia = new AtomicLong();
     private final AtomicLong versionActual = new AtomicLong();
     private final AtomicBoolean running = new AtomicBoolean();
+    private final AtomicBoolean listoParaEscrituras = new AtomicBoolean();
     private volatile boolean peerAlcanzable;
-    private final ExecutorService workers = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "replica-worker-" + servicioSeguro());
-        t.setDaemon(true);
-        return t;
-    });
+    private final ExecutorService workers = Ejecutores.acotado(
+            "replica-worker-" + servicioSeguro(), 16, true);
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "replica-sync-" + servicioSeguro());
         t.setDaemon(true);
@@ -65,6 +64,7 @@ public final class ReplicadorEstado<T> {
         this.servicio = servicio;
         this.nodoId = nodoId;
         this.writerNodeId = Configuracion.writerNodeId(servicio);
+        this.peerNodeId = nodoId == 1 ? 2 : 1;
         this.puertoLocal = puertoLocal;
         this.peer = peer;
         this.archivoVersion = Path.of(pathVersion);
@@ -72,7 +72,7 @@ public final class ReplicadorEstado<T> {
         this.lectorLocal = lectorLocal;
         this.aplicadorLocal = aplicadorLocal;
         this.reloj = reloj;
-        long persisted = leerVersion();
+        long persisted = cargarVersionLocal();
         versionActual.set(persisted);
         secuencia.set(persisted >>> 8);
     }
@@ -96,10 +96,23 @@ public final class ReplicadorEstado<T> {
     }
 
     public Resultado registrarCambioLocal(T estado, String requestId) {
+        if (nodoId != writerNodeId) {
+            throw new IllegalStateException("Nodo " + nodoId + " no es writer de " + servicio);
+        }
+        if (running.get() && !listoParaEscrituras.get()) {
+            throw new IllegalStateException("Writer aun no reconciliado con su replica");
+        }
         long version;
         String payloadJson;
         synchronized (this) {
+            long versionEstado = versionEstado(estado);
+            if (versionEstado > 0L && versionEstado != versionActual.get()) {
+                throw new IllegalStateException("Snapshot local desfasado: estado=" + versionEstado
+                        + " version=" + versionActual.get());
+            }
             version = siguienteVersion(versionActual.get());
+            asignarVersion(estado, version);
+            aplicadorLocal.accept(estado);
             versionActual.set(version);
             persistirVersion(version);
             payloadJson = estado != null ? GSON.toJson(estado) : null;
@@ -112,13 +125,16 @@ public final class ReplicadorEstado<T> {
     public long getVersionActual() { return versionActual.get(); }
     public Endpoint getPeer() { return peer; }
     public boolean isPeerAlcanzable() { return peerAlcanzable; }
+    public boolean isListoParaEscrituras() {
+        return nodoId != writerNodeId || !running.get() || listoParaEscrituras.get();
+    }
 
     private void servidorLoop() {
         try (ServerSocket server = Transporte.servidor(puertoLocal)) {
             serverSocket = server;
             while (running.get()) {
                 try {
-                    Socket socket = server.accept();
+                    Socket socket = Transporte.aceptar(server);
                     workers.submit(() -> manejar(socket));
                 } catch (IOException e) {
                     if (running.get()) LOG.warning("[REPL] accept: " + e.getMessage());
@@ -137,13 +153,17 @@ public final class ReplicadorEstado<T> {
                      socket.getOutputStream(), StandardCharsets.UTF_8), true)) {
             String line = LineaJson.leer(in, Configuracion.maxReplicationBytes());
             MensajeReplicacion msg = MensajeReplicacion.fromJson(line);
-            if (msg == null || !servicio.equals(msg.servicio) || !msg.firmaValida()) {
+            if (msg == null || !servicio.equals(msg.servicio) || !msg.firmaValida()
+                    || msg.nodoOrigen != peerNodeId || !msg.esFresco()
+                    || !SeguridadMensajes.aceptarUnaVez("replica-" + servicio,
+                    msg.tipo + "|" + msg.nodoOrigen + "|" + msg.requestId, msg.timestamp)) {
                 out.println(respuesta(MensajeReplicacion.ERROR, "Firma/servicio invalido").toJson());
                 return;
             }
             reloj.update(msg.lamportClock);
             if (MensajeReplicacion.PULL.equals(msg.tipo)) {
                 MensajeReplicacion snapshot = respuesta(MensajeReplicacion.SNAPSHOT, "Estado actual");
+                snapshot.requestId = msg.requestId;
                 snapshot.version = versionActual.get();
                 T estado = lectorLocal.get();
                 snapshot.payloadJson = estado == null ? null : GSON.toJson(estado);
@@ -152,9 +172,17 @@ public final class ReplicadorEstado<T> {
                 return;
             }
             if (MensajeReplicacion.PUSH.equals(msg.tipo)) {
-                aplicarSiNueva(msg);
-                MensajeReplicacion ack = respuesta(MensajeReplicacion.ACK, "version=" + versionActual.get());
-                ack.version = versionActual.get();
+                if (msg.nodoOrigen != writerNodeId || !versionPerteneceAlWriter(msg.version)) {
+                    out.println(respuesta(MensajeReplicacion.ERROR, "Origen no autorizado").toJson());
+                    return;
+                }
+                if (!aplicarPush(msg)) {
+                    out.println(respuesta(MensajeReplicacion.ERROR,
+                            "Conflicto de version o snapshot").toJson());
+                    return;
+                }
+                MensajeReplicacion ack = respuesta(MensajeReplicacion.ACK, "version=" + msg.version);
+                ack.version = msg.version;
                 ack.requestId = msg.requestId;
                 ack.firmar();
                 out.println(ack.toJson());
@@ -166,16 +194,24 @@ public final class ReplicadorEstado<T> {
         }
     }
 
-    private synchronized void aplicarSiNueva(MensajeReplicacion msg) {
+    private synchronized boolean aplicarPush(MensajeReplicacion msg) {
         long actual = versionActual.get();
-        if (msg.version <= actual || msg.payloadJson == null) return;
-        T estado = GSON.fromJson(msg.payloadJson, tipo);
+        if (msg.payloadJson == null) return false;
+        if (msg.version < actual) return false;
+        if (msg.version == actual) {
+            T local = lectorLocal.get();
+            return local != null && SeguridadMensajes.sha256Texto(GSON.toJson(local))
+                    .equals(SeguridadMensajes.sha256Texto(msg.payloadJson));
+        }
+        T estado = estadoRemotoValido(msg);
+        if (estado == null) return false;
         aplicadorLocal.accept(estado);
         versionActual.set(msg.version);
         secuencia.accumulateAndGet(msg.version >>> 8, Math::max);
         persistirVersion(msg.version);
         LOG.info("[REPL] APPLY servicio=" + servicio + " nodo=" + nodoId
                 + " version=" + msg.version + " requestId=" + msg.requestId);
+        return true;
     }
 
     private boolean enviarPush(T estado, String requestId, long version) {
@@ -193,7 +229,9 @@ public final class ReplicadorEstado<T> {
         try {
             MensajeReplicacion resp = enviar(push);
             return resp != null && MensajeReplicacion.ACK.equals(resp.tipo)
-                    && resp.firmaValida() && resp.version >= version;
+                    && servicio.equals(resp.servicio) && resp.nodoOrigen == peerNodeId
+                    && resp.firmaValida() && resp.esFresco() && resp.version == version
+                    && java.util.Objects.equals(resp.requestId, requestId);
         } catch (Exception e) {
             LOG.warning("[REPL] Replica no disponible " + peer + ": " + e.getMessage());
             return false;
@@ -211,7 +249,10 @@ public final class ReplicadorEstado<T> {
         pull.requestId = UUID.randomUUID().toString();
         pull.firmar();
         MensajeReplicacion remoto = enviar(pull);
-        if (remoto == null || !remoto.firmaValida()) {
+        if (remoto == null || !MensajeReplicacion.SNAPSHOT.equals(remoto.tipo)
+                || !servicio.equals(remoto.servicio) || !remoto.firmaValida() || !remoto.esFresco()
+                || remoto.nodoOrigen != peerNodeId || !java.util.Objects.equals(remoto.requestId, pull.requestId)
+                || !versionAceptable(remoto.version)) {
             peerAlcanzable = false;
             return;
         }
@@ -220,20 +261,28 @@ public final class ReplicadorEstado<T> {
         long local;
         String snapshotJson = null;
         long versionPush = 0;
-        int accion = 0; // 0=nada, 1=aplicar remoto, 2=push local, 3=push init
+        int accion = 0; // 0=nada, 1=aplicar nuevo, 2=push local, 3=push init, 4=reparar local
 
         synchronized (this) {
             local = versionActual.get();
-            if (remoto.version > local && remoto.payloadJson != null) {
+            T estadoLocal = lectorLocal.get();
+            boolean snapshotDesfasado = estadoLocal == null
+                    || (estadoLocal instanceof EstadoVersionado
+                    && versionEstado(estadoLocal) != local);
+            if (snapshotDesfasado && remoto.version >= local && remoto.payloadJson != null) {
+                accion = 4;
+            } else if (remoto.version > local && remoto.payloadJson != null) {
                 accion = 1;
-            } else if (local > remoto.version) {
+            } else if (local > remoto.version && nodoId == writerNodeId) {
                 snapshotJson = GSON.toJson(lectorLocal.get());
                 versionPush = local;
                 accion = 2;
-            } else if (local == remoto.version && local == 0L && nodoId < remoto.nodoOrigen) {
+            } else if (local == remoto.version && local == 0L && nodoId == writerNodeId) {
                 T estado = lectorLocal.get();
                 if (estado != null) {
                     versionPush = siguienteVersion(0L);
+                    asignarVersion(estado, versionPush);
+                    aplicadorLocal.accept(estado);
                     versionActual.set(versionPush);
                     persistirVersion(versionPush);
                     snapshotJson = GSON.toJson(estado);
@@ -242,11 +291,66 @@ public final class ReplicadorEstado<T> {
             }
         }
 
+        boolean reconciliado = true;
         switch (accion) {
-            case 1 -> aplicarSiNueva(remoto);
-            case 2 -> enviarPushPreparado(snapshotJson, "sync-" + UUID.randomUUID(), versionPush);
-            case 3 -> enviarPushPreparado(snapshotJson, "sync-init-" + UUID.randomUUID(), versionPush);
+            case 1 -> reconciliado = aplicarRemotoSiNuevo(remoto);
+            case 2 -> reconciliado = enviarPushPreparado(snapshotJson,
+                    "sync-" + UUID.randomUUID(), versionPush);
+            case 3 -> reconciliado = enviarPushPreparado(snapshotJson,
+                    "sync-init-" + UUID.randomUUID(), versionPush);
+            case 4 -> reconciliado = aplicarRecuperacion(remoto);
+            default -> reconciliado = snapshotsIguales(remoto);
         }
+        if (nodoId == writerNodeId) {
+            listoParaEscrituras.set(reconciliado);
+        }
+    }
+
+    private synchronized boolean aplicarRecuperacion(MensajeReplicacion msg) {
+        if (msg.version < versionActual.get() || msg.payloadJson == null) return false;
+        T estado = estadoRemotoValido(msg);
+        if (estado == null) return false;
+        aplicadorLocal.accept(estado);
+        versionActual.set(msg.version);
+        secuencia.accumulateAndGet(msg.version >>> 8, Math::max);
+        persistirVersion(msg.version);
+        LOG.warning("[REPL] Snapshot local reparado desde peer version=" + msg.version);
+        return true;
+    }
+
+    private synchronized boolean aplicarRemotoSiNuevo(MensajeReplicacion msg) {
+        if (msg.version <= versionActual.get()) return snapshotsIguales(msg);
+        T estado = estadoRemotoValido(msg);
+        if (estado == null) return false;
+        aplicadorLocal.accept(estado);
+        versionActual.set(msg.version);
+        secuencia.accumulateAndGet(msg.version >>> 8, Math::max);
+        persistirVersion(msg.version);
+        return true;
+    }
+
+    private T estadoRemotoValido(MensajeReplicacion msg) {
+        if (!versionPerteneceAlWriter(msg.version) || msg.payloadJson == null) return null;
+        T estado = GSON.fromJson(msg.payloadJson, tipo);
+        if (estado instanceof EstadoVersionado && versionEstado(estado) != msg.version) return null;
+        asignarVersion(estado, msg.version);
+        return estado;
+    }
+
+    private boolean snapshotsIguales(MensajeReplicacion remoto) {
+        if (remoto.version != versionActual.get()) return false;
+        T local = lectorLocal.get();
+        if (local == null || remoto.payloadJson == null) return local == null && remoto.payloadJson == null;
+        return SeguridadMensajes.sha256Texto(GSON.toJson(local))
+                .equals(SeguridadMensajes.sha256Texto(remoto.payloadJson));
+    }
+
+    private boolean versionAceptable(long version) {
+        return version == 0L || versionPerteneceAlWriter(version);
+    }
+
+    private boolean versionPerteneceAlWriter(long version) {
+        return version > 0L && (int) (version & 0xffL) == writerNodeId;
     }
 
     private long siguienteVersion(long piso) {
@@ -275,6 +379,7 @@ public final class ReplicadorEstado<T> {
         m.version = versionActual.get();
         m.requestId = UUID.randomUUID().toString();
         m.lamportClock = reloj.tick();
+        m.timestamp = System.currentTimeMillis();
         return m;
     }
 
@@ -289,6 +394,26 @@ public final class ReplicadorEstado<T> {
         try { return Files.exists(archivoVersion)
                 ? Long.parseLong(Files.readString(archivoVersion).trim()) : 0L; }
         catch (Exception e) { return 0L; }
+    }
+
+    private long cargarVersionLocal() {
+        T estado = lectorLocal.get();
+        long embebida = versionEstado(estado);
+        // Los estados nuevos llevan la version dentro de Main.json. Un VERSION.txt
+        // legado no puede demostrar que corresponda al mismo snapshot y se ignora.
+        if (estado instanceof EstadoVersionado) return embebida;
+        return leerVersion();
+    }
+
+    private static long versionEstado(Object estado) {
+        return estado instanceof EstadoVersionado versionado
+                ? versionado.getReplicationVersion() : 0L;
+    }
+
+    private static void asignarVersion(Object estado, long version) {
+        if (estado instanceof EstadoVersionado versionado) {
+            versionado.setReplicationVersion(version);
+        }
     }
 
     private synchronized void persistirVersion(long version) {

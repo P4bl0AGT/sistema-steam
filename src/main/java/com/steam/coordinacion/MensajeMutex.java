@@ -20,6 +20,7 @@ public class MensajeMutex {
     public String requestId;
     public long lamportClock;
     public long leaseUntil;
+    public long timestamp;
     public String firma;
 
     public MensajeMutex() {}
@@ -31,14 +32,16 @@ public class MensajeMutex {
         this.recurso = recurso;
         this.requestId = requestId;
         this.lamportClock = lamportClock;
+        this.timestamp = System.currentTimeMillis();
     }
 
     public void firmar() { firma = SeguridadMensajes.firmarTexto(baseFirma()); }
     public boolean firmaValida() { return SeguridadMensajes.validarTexto(baseFirma(), firma); }
+    public boolean esFresco() { return SeguridadMensajes.esTimestampFresco(timestamp); }
 
     private String baseFirma() {
         return tipo + "|" + solicitanteId + "|" + coordinadorId + "|" + recurso + "|"
-                + requestId + "|" + lamportClock + "|" + leaseUntil;
+                + requestId + "|" + lamportClock + "|" + leaseUntil + "|" + timestamp;
     }
 
     private static final Gson GSON = new Gson();

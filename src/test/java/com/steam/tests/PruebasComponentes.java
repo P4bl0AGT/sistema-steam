@@ -2,6 +2,7 @@ package com.steam.tests;
 
 import com.steam.common.CacheIdempotencia;
 import com.steam.common.Endpoint;
+import com.steam.common.EstadoVersionado;
 import com.steam.common.MensajeReplicacion;
 import com.steam.common.MensajeProtocolo;
 import com.steam.common.OrdenMensajes;
@@ -27,9 +28,12 @@ public final class PruebasComponentes {
     public static void main(String[] args) throws Exception {
         probarLamportConcurrente();
         probarIdempotenciaConcurrente();
+        probarIdempotenciaPersistente();
+        probarConflictoRequestId();
         probarFirmaControl();
         probarFirmaReplicacionFuerte();
         probarEscritorUnicoReplica();
+        probarVersionEmbebida();
         probarAcumuladorCoordinacion();
         probarExpiracionSesion();
         probarOrdenDeterminista();
@@ -70,6 +74,23 @@ public final class PruebasComponentes {
         pool.shutdownNow();
     }
 
+    private static void probarIdempotenciaPersistente() throws Exception {
+        var archivo = Files.createTempDirectory("steam-idempotencia-test").resolve("cache.json");
+        MensajeProtocolo req = MensajeProtocolo.request("COBRO", "token").put("monto", 10);
+        AtomicInteger ejecuciones = new AtomicInteger();
+        CacheIdempotencia primeraJvm = new CacheIdempotencia(archivo.toString());
+        check(primeraJvm.ejecutar(req, () -> {
+            ejecuciones.incrementAndGet();
+            return MensajeProtocolo.ok(req.getRequestId(), "aplicado");
+        }).isOk(), "Operacion durable inicial OK");
+        CacheIdempotencia segundaJvm = new CacheIdempotencia(archivo.toString());
+        check(segundaJvm.ejecutar(req, () -> {
+            ejecuciones.incrementAndGet();
+            return MensajeProtocolo.ok(req.getRequestId(), "duplicado");
+        }).isOk(), "Respuesta durable recuperada");
+        check(ejecuciones.get() == 1, "Reinicio no repite operacion durable");
+    }
+
     private static void probarFirmaControl() {
         MensajeProtocolo req = MensajeProtocolo.request("CONTROL_TEST", null);
         req.setEmisor("test");
@@ -84,6 +105,27 @@ public final class PruebasComponentes {
         recibido = MensajeProtocolo.fromJson(req.toJson());
         recibido.setOperacion("ALTERADA");
         check(!SeguridadMensajes.validarControl(recibido), "Firma detecta sobre alterado");
+        recibido = MensajeProtocolo.fromJson(req.toJson());
+        check(!SeguridadMensajes.validarControl(recibido), "Replay de control rechazado");
+    }
+
+    private static void probarConflictoRequestId() {
+        CacheIdempotencia cache = new CacheIdempotencia();
+        AtomicInteger ejecuciones = new AtomicInteger();
+        MensajeProtocolo a = MensajeProtocolo.request("A", null);
+        MensajeProtocolo b = MensajeProtocolo.request("B", null);
+        b.setRequestId(a.getRequestId());
+        check(cache.ejecutar(a, () -> {
+            ejecuciones.incrementAndGet();
+            return MensajeProtocolo.ok(a.getRequestId(), "ok");
+        }).isOk(), "Primera solicitud se ejecuta");
+        MensajeProtocolo conflicto = cache.ejecutar(b, () -> {
+            ejecuciones.incrementAndGet();
+            return MensajeProtocolo.ok(b.getRequestId(), "no");
+        });
+        check("REQUEST_ID_CONFLICT".equals(conflicto.getCodigoError()),
+                "requestId no admite contenido distinto");
+        check(ejecuciones.get() == 1, "Conflicto no ejecuta la operacion");
     }
 
     private static void probarFirmaReplicacionFuerte() {
@@ -100,6 +142,12 @@ public final class PruebasComponentes {
         check(a.payloadJson.hashCode() == b.payloadJson.hashCode(), "Precondicion colision Java");
         check(!a.contenidoFirmable().equals(b.contenidoFirmable()),
                 "SHA-256 distingue payloads con igual hashCode");
+        a.timestamp = System.currentTimeMillis();
+        a.firmar();
+        check(a.firmaValida() && a.esFresco(), "Sobre de replica vigente");
+        a.timestamp = System.currentTimeMillis() - 120_000L;
+        a.firmar();
+        check(!a.esFresco(), "Sobre de replica expirado");
     }
 
     private static void probarEscritorUnicoReplica() throws Exception {
@@ -114,6 +162,34 @@ public final class PruebasComponentes {
         check(rechazada, "Replica secundaria no publica escrituras");
     }
 
+    private static void probarVersionEmbebida() throws Exception {
+        var dir = Files.createTempDirectory("steam-version-test");
+        EstadoPrueba estado = new EstadoPrueba();
+        java.util.concurrent.atomic.AtomicReference<EstadoPrueba> guardado =
+                new java.util.concurrent.atomic.AtomicReference<>(estado);
+        ReplicadorEstado<EstadoPrueba> replica = new ReplicadorEstado<>("JUEGOS", 1, 0,
+                new Endpoint("localhost", 1), dir.resolve("version.txt").toString(),
+                EstadoPrueba.class, guardado::get, guardado::set, new RelojLamport("version-test"));
+        java.util.logging.Logger log = java.util.logging.Logger.getLogger(ReplicadorEstado.class.getName());
+        java.util.logging.Level nivelAnterior = log.getLevel();
+        try {
+            log.setLevel(java.util.logging.Level.OFF);
+            ReplicadorEstado.Resultado resultado = replica.registrarCambioLocal(estado, "version-r");
+            check(resultado.version() > 0L, "Writer genera version");
+            check(estado.getReplicationVersion() == resultado.version(),
+                    "Version viaja dentro del snapshot");
+        } finally {
+            log.setLevel(nivelAnterior);
+            replica.stop();
+        }
+    }
+
+    public static final class EstadoPrueba implements EstadoVersionado {
+        private long replicationVersion;
+        @Override public long getReplicationVersion() { return replicationVersion; }
+        @Override public void setReplicationVersion(long version) { replicationVersion = version; }
+    }
+
     private static void probarAcumuladorCoordinacion() {
         AcumuladorCoordinacion acumulador = new AcumuladorCoordinacion();
         acumulador.observar(10, 20);
@@ -126,9 +202,13 @@ public final class PruebasComponentes {
 
     private static void probarExpiracionSesion() {
         Sesion sesion = new Sesion("t", "u", "r");
-        sesion.ultimaActividad = System.currentTimeMillis() - 10_000L;
+        check(!"t".equals(sesion.token), "Token no se persiste en claro");
+        check(sesion.coincideToken("t"), "Hash de token valida el bearer original");
+        sesion.token = "legacy";
+        check(sesion.coincideToken("legacy"), "Token legado sigue siendo migrable");
+        sesion.creadoEn = System.currentTimeMillis() - 10_000L;
         check(!sesion.vigente(1_000L), "Sesion expira");
-        sesion.ultimaActividad = System.currentTimeMillis();
+        sesion.creadoEn = System.currentTimeMillis();
         check(sesion.vigente(1_000L), "Sesion reciente vigente");
     }
 

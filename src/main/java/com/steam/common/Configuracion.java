@@ -71,7 +71,7 @@ public final class Configuracion {
     }
 
     public static String advertisedHost() { return get("steam.advertised.host", "localhost"); }
-    public static String bindHost()       { return get("steam.bind.host", "0.0.0.0"); }
+    public static String bindHost()       { return get("steam.bind.host", "127.0.0.1"); }
     public static int connectTimeoutMs()  { return getInt("steam.connect.timeout.ms", 3_000); }
     public static int readTimeoutMs()     { return getInt("steam.read.timeout.ms", Constantes.TIMEOUT_MS); }
     public static int maxMessageBytes()   { return getInt("steam.max.message.bytes", 65_536); }
@@ -100,6 +100,21 @@ public final class Configuracion {
     }
     public static boolean tlsEnabled()    { return getBoolean("steam.tls.enabled", false); }
     public static boolean tlsClientAuth() { return getBoolean("steam.tls.client.auth", false); }
+
+    /** Valida secretos y TLS antes de que un proceso abra sus puertos. */
+    public static void validarArranque() {
+        String secret = controlSecret();
+        if (!demoMode() && secret.length() < 32) {
+            throw new IllegalStateException("STEAM_CONTROL_SECRET debe tener al menos 32 caracteres");
+        }
+        String bind = bindHost();
+        if (demoMode() && !("127.0.0.1".equals(bind) || "localhost".equalsIgnoreCase(bind)
+                || "::1".equals(bind))) {
+            throw new IllegalStateException(
+                    "El modo demo solo puede escuchar en loopback; use steam.demo.mode=false");
+        }
+        configurarTls();
+    }
 
     public static synchronized void configurarTls() {
         if (!tlsEnabled()) return;

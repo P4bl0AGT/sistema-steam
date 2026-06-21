@@ -24,6 +24,7 @@ public class MensajeBully {
     public int    emisorId;
     public int    coordinadorId; // relevante solo en COORDINATOR
     public long   lamportClock;
+    public long   timestamp;
     public String firma;
 
     public MensajeBully() {}
@@ -33,6 +34,7 @@ public class MensajeBully {
         this.emisorId      = emisorId;
         this.coordinadorId = coordinadorId;
         this.lamportClock  = lamportClock;
+        this.timestamp     = System.currentTimeMillis();
     }
 
     private static final Gson GSON = new Gson();
@@ -45,8 +47,10 @@ public class MensajeBully {
         return SeguridadMensajes.validarTexto(baseFirma(), firma);
     }
 
+    public boolean esFresco() { return SeguridadMensajes.esTimestampFresco(timestamp); }
+
     private String baseFirma() {
-        return tipo + "|" + emisorId + "|" + coordinadorId + "|" + lamportClock;
+        return tipo + "|" + emisorId + "|" + coordinadorId + "|" + lamportClock + "|" + timestamp;
     }
 
     public String toJson()                           { return GSON.toJson(this); }

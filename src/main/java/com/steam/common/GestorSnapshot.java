@@ -47,8 +47,7 @@ public class GestorSnapshot {
 
     /**
      * Inicia el daemon con un retardo inicial personalizado.
-     * Útil para escalonar dos nodos que comparten los mismos archivos Main/Copy,
-     * evitando que ambos escriban al mismo archivo temporal simultáneamente.
+     * Útil para escalonar el trabajo de disco de los nodos.
      *
      * Ejemplo: Nodo 1 → start(30), Nodo 2 → start(45); nunca coinciden.
      */

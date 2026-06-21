@@ -538,6 +538,22 @@ public class ClienteJava {
         if (!okOImprime(resp)) return;
         System.out.println("\n[MENSAJES RECIBIDOS] " + resp.getMensaje());
         imprimirLista(resp.get("mensajes"));
+        if (resp.get("mensajes") instanceof List<?> mensajes) {
+            List<String> ids = mensajes.stream()
+                    .filter(Map.class::isInstance)
+                    .map(Map.class::cast)
+                    .map(m -> String.valueOf(m.get("id")))
+                    .filter(id -> !"null".equals(id))
+                    .toList();
+            if (!ids.isEmpty()) {
+                MensajeProtocolo ack = MensajeProtocolo.request(
+                        Constantes.CONFIRMAR_ENTREGA_MENSAJES, token).put("mensajeIds", ids);
+                MensajeProtocolo ackResp = enviar(ack);
+                if (ackResp == null || !ackResp.isOk()) {
+                    System.out.println("[!] No se pudo confirmar la entrega; los mensajes reapareceran.");
+                }
+            }
+        }
     }
 
     private static void verConversacion() {

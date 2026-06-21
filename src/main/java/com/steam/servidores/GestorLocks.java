@@ -73,7 +73,7 @@ public class GestorLocks implements Runnable {
      * Recorre las reservas activas; por cada una expirada:
      *  1. Restaura el stock del juego correspondiente.
      *  2. Marca la reserva como inactiva.
-     *  3. Guarda Main + Copy (replicación inmediata).
+     *  3. Guarda Main y publica el snapshot al peer.
      *
      * Sincronizado con el mismo lock que usan las transacciones de svJuegos,
      * evitando condiciones de carrera sobre el stock.

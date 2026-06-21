@@ -51,8 +51,9 @@ public class svJuegos {
     private final RelojLamport                 relojLamport;
     private final GestorPersistencia<BDJuegos> gp;
     private final ReplicadorEstado<BDJuegos>   replicador;
-    private final CacheIdempotencia             idempotencia = new CacheIdempotencia();
-    private final ExecutorService              pool = Executors.newFixedThreadPool(Constantes.POOL_SIZE);
+    private final CacheIdempotencia             idempotencia;
+    private final CacheIdempotencia             idempotenciaLecturas = new CacheIdempotencia();
+    private final ExecutorService              pool = Ejecutores.acotado("juegos-worker", Constantes.POOL_SIZE, false);
     private final Object                       lock = new Object(); // monitor compartido con GestorLocks
 
     // ── Coordinación distribuida ──────────────────────────────────────────────
@@ -64,6 +65,7 @@ public class svJuegos {
     public svJuegos(int nodo, int puerto) {
         this.miId   = nodo;
         this.puerto = puerto;
+        this.idempotencia = new CacheIdempotencia(RutasDatos.idempotencia("juegos", nodo));
         this.relojLamport = new RelojLamport("JUE-" + nodo);
         String main = RutasDatos.main("juegos", nodo);
         String copy = RutasDatos.copy("juegos", nodo);
@@ -110,6 +112,7 @@ public class svJuegos {
     // ── Punto de entrada ──────────────────────────────────────────────────────
 
     public static void main(String[] args) {
+        Configuracion.validarArranque();
         int nodo   = args.length > 0 ? Integer.parseInt(args[0]) : 1;
         int puerto = (nodo == 2) ? Constantes.PUERTO_JUE_2 : Constantes.PUERTO_JUE_1;
         GestorLog.configurar("svJuegos-" + nodo);
@@ -147,7 +150,7 @@ public class svJuegos {
                 puertoBully, puertoMutex, puertoRepl);
 
         Runtime.getRuntime().addShutdownHook(new Thread(
-            () -> { sv.replicador.stop(); sv.bully.stop(); sv.mutex.stop();
+            () -> { snap.stop(); sv.replicador.stop(); sv.bully.stop(); sv.mutex.stop();
                     RegistradorProxy.desregistrar("JUEGOS", puerto); },
             "shutdown-juegos-" + nodo
         ));
@@ -159,11 +162,13 @@ public class svJuegos {
         LOG.info("=== svJuegos iniciado en puerto " + puerto + " ===");
         try (ServerSocket server = Transporte.servidor(puerto)) {
             while (true) {
-                Socket cliente = server.accept();
+                Socket cliente = Transporte.aceptar(server);
                 pool.submit(() -> manejarCliente(cliente));
             }
         } catch (IOException e) {
             LOG.severe("Error en svJuegos:" + puerto + " → " + e.getMessage());
+        } finally {
+            pool.shutdownNow();
         }
     }
 
@@ -187,10 +192,21 @@ public class svJuegos {
              PrintWriter    out = new PrintWriter(
                      new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true)) {
 
-            String linea = LineaJson.leer(in, Configuracion.maxMessageBytes());
+            String linea;
+            try { linea = LineaJson.leer(in, Configuracion.maxMessageBytes()); }
+            catch (LineaJson.MensajeDemasiadoGrandeException e) {
+                out.println(MensajeProtocolo.error("?", "MESSAGE_TOO_LARGE", e.getMessage()).toJson());
+                return;
+            }
             if (linea == null) return;
 
-            MensajeProtocolo req = MensajeProtocolo.fromJson(linea);
+            MensajeProtocolo req;
+            try { req = MensajeProtocolo.fromJson(linea); }
+            catch (RuntimeException e) {
+                out.println(MensajeProtocolo.error("?", "JSON_MALFORMADO",
+                        "Mensaje JSON mal formado").toJson());
+                return;
+            }
             String error = SeguridadMensajes.validarSolicitud(req);
             if (error != null) {
                 out.println(MensajeProtocolo.error(req == null ? "?" : req.getRequestId(),
@@ -200,7 +216,11 @@ public class svJuegos {
             // Evento de recepción: actualizar reloj de Lamport
             relojLamport.update(req.getLamportClock());
 
-            MensajeProtocolo resp = idempotencia.ejecutar(req.getRequestId(), () -> procesar(req));
+            boolean escrituraDurable = Utils.esOperacionEscritura(req.getOperacion())
+                    && miId == Configuracion.writerNodeId("JUEGOS")
+                    && replicador.isListoParaEscrituras();
+            CacheIdempotencia cache = escrituraDurable ? idempotencia : idempotenciaLecturas;
+            MensajeProtocolo resp = cache.ejecutar(req, () -> procesar(req));
             // Estampar reloj de Lamport en la respuesta
             resp.setLamportClock(relojLamport.tick());
             resp.setEmisor("JUE-" + miId);
@@ -218,11 +238,15 @@ public class svJuegos {
 
     private MensajeProtocolo procesar(MensajeProtocolo req) {
         if (req == null) return MensajeProtocolo.error("?", "INVALID_REQUEST", "Mensaje inválido");
-        if (Utils.esOperacionEscritura(req.getOperacion())
-                && miId != Configuracion.writerNodeId("JUEGOS")
-                && replicador.isPeerAlcanzable()) {
-            return MensajeProtocolo.error(req.getRequestId(), "NOT_PRIMARY",
-                    "Nodo secundario de juegos; escritor=" + Configuracion.writerNodeId("JUEGOS"));
+        if (Utils.esOperacionEscritura(req.getOperacion())) {
+            if (miId != Configuracion.writerNodeId("JUEGOS")) {
+                return MensajeProtocolo.error(req.getRequestId(), "NOT_PRIMARY",
+                        "Nodo secundario de juegos; escritor=" + Configuracion.writerNodeId("JUEGOS"));
+            }
+            if (!replicador.isListoParaEscrituras()) {
+                return MensajeProtocolo.error(req.getRequestId(), "SERVICE_UNAVAILABLE",
+                        "Writer de juegos reconciliando su estado");
+            }
         }
         // HEALTH_CHECK en FINE; resto en INFO con marca Lamport
         boolean esHC = Constantes.HEALTH_CHECK.equals(req.getOperacion());
@@ -268,6 +292,7 @@ public class svJuegos {
     private MensajeProtocolo healthCheck(MensajeProtocolo req) {
         MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "svJuegos OK");
         resp.put("puerto", puerto);
+        resp.put("writerReady", replicador.isListoParaEscrituras());
         return resp;
     }
 
@@ -383,6 +408,10 @@ public class svJuegos {
         if (!auth.valido()) {
             return MensajeProtocolo.error(req.getRequestId(), "AUTHENTICATION_FAILED",
                     "Token inválido: " + auth.mensaje());
+        }
+        if (!Constantes.ROL_COMPRADOR.equals(auth.rol())) {
+            return MensajeProtocolo.error(req.getRequestId(), "AUTHORIZATION_DENIED",
+                    "Se requiere rol COMPRADOR");
         }
 
         String juegoId  = req.getString("juegoId");
@@ -531,6 +560,10 @@ public class svJuegos {
 
             // Verificar saldo
             double saldo = bd.billeteras.getOrDefault(auth.username(), 0.0);
+            if (!Double.isFinite(saldo) || !Utils.dineroValido(reserva.precio)) {
+                return MensajeProtocolo.error(req.getRequestId(), "PERSISTENCE_ERROR",
+                        "Importe persistido invalido");
+            }
             if (saldo < reserva.precio) {
                 return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_INSUFFICIENT_FUNDS",
                         "Saldo insuficiente. Tienes $" + saldo +
@@ -538,14 +571,19 @@ public class svJuegos {
             }
 
             // Descontar saldo comprador
-            bd.billeteras.put(auth.username(), saldo - reserva.precio);
+            bd.billeteras.put(auth.username(), Utils.redondearDinero(saldo - reserva.precio));
 
             // Acreditar al vendedor
             Juego juego = bd.catalogo.stream()
                     .filter(j -> j.id.equals(reserva.juegoId)).findFirst().orElse(null);
             if (juego != null) {
                 double saldoVendedor = bd.billeteras.getOrDefault(juego.vendedor, 0.0);
-                bd.billeteras.put(juego.vendedor, saldoVendedor + reserva.precio);
+                if (!Double.isFinite(saldoVendedor)) {
+                    return MensajeProtocolo.error(req.getRequestId(), "PERSISTENCE_ERROR",
+                            "Saldo persistido del vendedor invalido");
+                }
+                bd.billeteras.put(juego.vendedor,
+                        Utils.redondearDinero(saldoVendedor + reserva.precio));
                 juego.totalVentas++;
             }
 
@@ -646,7 +684,9 @@ public class svJuegos {
         double precio = req.getDouble("precio");
         int    stock  = req.getInt("stock");
 
-        if (nombre == null || desc == null || precio <= 0 || stock <= 0) {
+        if (nombre == null || nombre.isBlank() || nombre.length() > 120
+                || desc == null || desc.isBlank() || desc.length() > 2_000
+                || !Utils.dineroValido(precio) || stock <= 0 || stock > 1_000_000) {
             return MensajeProtocolo.error(req.getRequestId(),
                     "Campos requeridos: nombre, descripcion, precio (>0), stock (>0)");
         }
@@ -655,7 +695,8 @@ public class svJuegos {
             BDJuegos bd = gp.leer();
             if (bd == null) return MensajeProtocolo.error(req.getRequestId(), "BD no disponible");
 
-            Juego nuevo = new Juego(uuid(), nombre, desc, precio, stock, auth.username());
+            precio = Utils.redondearDinero(precio);
+            Juego nuevo = new Juego(uuid(), nombre.trim(), desc.trim(), precio, stock, auth.username());
             bd.catalogo.add(nuevo);
             // Asegurar billetera del vendedor
             bd.billeteras.putIfAbsent(auth.username(), 0.0);
@@ -694,10 +735,21 @@ public class svJuegos {
                 return MensajeProtocolo.error(req.getRequestId(), "No eres el propietario del juego");
             }
 
-            if (req.getString("nombre")      != null) juego.nombre      = req.getString("nombre");
-            if (req.getString("descripcion") != null) juego.descripcion = req.getString("descripcion");
-            if (req.getDouble("precio")      >  0)    juego.precio      = req.getDouble("precio");
-            if (req.getInt("stockExtra")     >  0)    juego.stock      += req.getInt("stockExtra");
+            String nuevoNombre = req.getString("nombre");
+            String nuevaDescripcion = req.getString("descripcion");
+            if (nuevoNombre != null && (nuevoNombre.isBlank() || nuevoNombre.length() > 120))
+                return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_INVALID_REQUEST", "Nombre invalido");
+            if (nuevaDescripcion != null && (nuevaDescripcion.isBlank() || nuevaDescripcion.length() > 2_000))
+                return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_INVALID_REQUEST", "Descripcion invalida");
+            if (req.get("precio") != null && !Utils.dineroValido(req.getDouble("precio")))
+                return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_INVALID_REQUEST", "Precio invalido");
+            int stockExtra = req.getInt("stockExtra");
+            if (stockExtra < 0 || stockExtra > 1_000_000 || (long) juego.stock + stockExtra > 1_000_000L)
+                return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_INVALID_REQUEST", "Stock invalido");
+            if (nuevoNombre != null) juego.nombre = nuevoNombre.trim();
+            if (nuevaDescripcion != null) juego.descripcion = nuevaDescripcion.trim();
+            if (req.get("precio") != null) juego.precio = Utils.redondearDinero(req.getDouble("precio"));
+            if (stockExtra > 0) juego.stock += stockExtra;
 
             try {
                 guardarReplicado(bd, req.getRequestId());
@@ -769,16 +821,27 @@ public class svJuegos {
         String targetUser = req.getString("targetUser");
         double monto      = req.getDouble("monto");
 
-        if (targetUser == null || monto <= 0) {
+        if (targetUser == null || !Utils.dineroValido(monto)) {
             return MensajeProtocolo.error(req.getRequestId(), "Faltan campos: targetUser, monto (>0)");
         }
+        targetUser = targetUser.trim();
+        if (!ValidadorToken.usuarioExiste(targetUser)) {
+            return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_NOT_FOUND",
+                    "Usuario destino no encontrado");
+        }
+        monto = Utils.redondearDinero(monto);
 
         synchronized (lock) {
             BDJuegos bd = gp.leer();
             if (bd == null) return MensajeProtocolo.error(req.getRequestId(), "BD no disponible");
 
             double actual = bd.billeteras.getOrDefault(targetUser, 0.0);
-            bd.billeteras.put(targetUser, actual + monto);
+            if (!Double.isFinite(actual)) {
+                return MensajeProtocolo.error(req.getRequestId(), "PERSISTENCE_ERROR",
+                        "Saldo persistido invalido");
+            }
+            double nuevoSaldo = Utils.redondearDinero(actual + monto);
+            bd.billeteras.put(targetUser, nuevoSaldo);
 
             try {
                 guardarReplicado(bd, req.getRequestId());
@@ -788,7 +851,7 @@ public class svJuegos {
 
             MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(),
                     "Saldo agregado a " + targetUser);
-            resp.put("nuevoSaldo", actual + monto);
+            resp.put("nuevoSaldo", nuevoSaldo);
             return resp;
         }
     }
@@ -939,8 +1002,9 @@ public class svJuegos {
     private static String uuid() { return UUID.randomUUID().toString(); }
 
     private ReplicadorEstado.Resultado guardarReplicado(BDJuegos bd, String requestId) throws IOException {
-        gp.guardar(bd);
-        ReplicadorEstado.Resultado resultado = replicador.registrarCambioLocal(bd, requestId);
+        ReplicadorEstado.Resultado resultado;
+        try { resultado = replicador.registrarCambioLocal(bd, requestId); }
+        catch (IllegalStateException e) { throw new IOException(e.getMessage(), e); }
         LOG.info("[REPL] requestId=" + requestId + " version=" + resultado.version()
                 + " confirmada=" + resultado.confirmada());
         return resultado;

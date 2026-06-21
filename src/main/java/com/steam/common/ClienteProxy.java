@@ -30,6 +30,7 @@ public final class ClienteProxy {
                 req.setEmisor(emisor);
                 req.setReceptor("Proxy@" + proxy);
                 req.setLamportClock(reloj.tick());
+                if (Utils.esOperacionControl(req.getOperacion())) SeguridadMensajes.firmarControl(req);
                 MensajeProtocolo resp = enviarA(req, proxy);
                 reloj.update(resp.getLamportClock());
                 return resp;

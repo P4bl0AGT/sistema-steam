@@ -23,7 +23,7 @@ public final class Constantes {
 
     // ── Timeouts ─────────────────────────────────────────────────────────────
     public static final int  TIMEOUT_MS              = 5_000;
-    public static final int  HEALTH_INTERVAL_MS      = 10_000;
+    public static final int  HEALTH_INTERVAL_MS      = 2_000;
     public static final long TTL_RESERVA_MS          = 5L * 60 * 1_000; // 5 min
 
     // ── Operaciones – Sesiones ────────────────────────────────────────────────
@@ -33,6 +33,7 @@ public final class Constantes {
     public static final String REGISTRAR_USUARIO = "REGISTRAR_USUARIO";
     public static final String LISTAR_USUARIOS   = "LISTAR_USUARIOS";
     public static final String CAMBIAR_PASS      = "CAMBIAR_PASS";
+    public static final String VALIDAR_USUARIO_INTERNO = "VALIDAR_USUARIO_INTERNO";
 
     // ── Operaciones – Juegos ─────────────────────────────────────────────────
     public static final String LISTAR_JUEGOS     = "LISTAR_JUEGOS";
@@ -54,6 +55,7 @@ public final class Constantes {
     // ── Operaciones – Mensajería ──────────────────────────────────────────────
     public static final String ENVIAR_MENSAJE    = "ENVIAR_MENSAJE";
     public static final String VER_MENSAJES      = "VER_MENSAJES";
+    public static final String CONFIRMAR_ENTREGA_MENSAJES = "CONFIRMAR_ENTREGA_MENSAJES";
     public static final String VER_CONVERSACION  = "VER_CONVERSACION";
 
     // ── Sistema ───────────────────────────────────────────────────────────────
@@ -84,15 +86,6 @@ public final class Constantes {
     public static final int    TIMEOUT_MUTEX_MS        = 10_000;
     public static final int    HEARTBEAT_COORD_MS      = 5_000;
 
-    // ── Operaciones de coordinación (enrutadas a JUEGOS por el Proxy) ─────────
-    public static final String BULLY_MSG               = "BULLY_MSG";
-    public static final String MUTEX_REQUEST           = "MUTEX_REQUEST";
-    public static final String MUTEX_GRANT             = "MUTEX_GRANT";
-    public static final String MUTEX_RELEASE           = "MUTEX_RELEASE";
-
-    // ── Membresía ─────────────────────────────────────────────────────────────
-    public static final String MEMBRESIA_FILE          = "data/MEMBRESIA.txt";
-
     // ── Roles ─────────────────────────────────────────────────────────────────
     public static final String ROL_COMPRADOR     = "COMPRADOR";
     public static final String ROL_VENDEDOR      = "VENDEDOR";
@@ -104,7 +97,6 @@ public final class Constantes {
 
     // ── Concurrencia ──────────────────────────────────────────────────────────
     public static final int POOL_SIZE       = 30;
-    public static final int MAX_CONNECTIONS = 100;
 
     // ── Prueba de carga ───────────────────────────────────────────────────────
     // Nº de compradores sembrados (cliente1..clienteN). El generador de carga
@@ -113,12 +105,6 @@ public final class Constantes {
 
     // ── Archivos de datos ─────────────────────────────────────────────────────
     public static final String DATA_DIR  = "data";
-    public static final String SES_MAIN  = "data/SES_Main.txt";
-    public static final String SES_COPY  = "data/SES_Copy.txt";
-    public static final String GME_MAIN  = "data/GME_Main.txt";
-    public static final String GME_COPY  = "data/GME_Copy.txt";
-    public static final String MSG_MAIN  = "data/MSG_Main.txt";
-    public static final String MSG_COPY  = "data/MSG_Copy.txt";
 
     private Constantes() {}
 }

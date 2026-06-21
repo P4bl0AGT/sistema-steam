@@ -8,10 +8,14 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Set;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.regex.Pattern;
 
 public final class Utils {
     private static final int PBKDF2_ITERACIONES = 60_000;
     private static final int PBKDF2_BITS = 256;
+    private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_.-]{3,32}");
 
     private Utils() {}
 
@@ -61,6 +65,23 @@ public final class Utils {
         }
     }
 
+    public static boolean usernameValido(String value) {
+        return value != null && USERNAME.matcher(value).matches();
+    }
+
+    public static boolean passwordValida(String value) {
+        return value != null && value.length() >= 6 && value.length() <= 128;
+    }
+
+    public static boolean dineroValido(double value) {
+        return Double.isFinite(value) && value > 0.0 && value <= 10_000_000.0;
+    }
+
+    public static double redondearDinero(double value) {
+        if (!Double.isFinite(value)) throw new IllegalArgumentException("Importe no finito");
+        return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
+    }
+
     /** Determina el cluster al que pertenece una operacion publica. */
     public static String clusterParaOperacion(String operacion) {
         return switch (operacion) {
@@ -80,6 +101,7 @@ public final class Utils {
                  Constantes.ESTADO_REPLICACION -> "JUEGOS";
 
             case Constantes.ENVIAR_MENSAJE, Constantes.VER_MENSAJES,
+                 Constantes.CONFIRMAR_ENTREGA_MENSAJES,
                  Constantes.VER_CONVERSACION -> "MENSAJERIA";
 
             default -> "DESCONOCIDO";
@@ -92,10 +114,19 @@ public final class Utils {
             Constantes.CONFIRMAR_PAGO, Constantes.CANCELAR_RESERVA,
             Constantes.PUBLICAR_JUEGO, Constantes.MODIFICAR_JUEGO,
             Constantes.ELIMINAR_JUEGO, Constantes.AGREGAR_SALDO,
-            Constantes.ENVIAR_MENSAJE, Constantes.VER_MENSAJES
+            Constantes.ENVIAR_MENSAJE, Constantes.CONFIRMAR_ENTREGA_MENSAJES
     );
+    private static final Set<String> CONTROL = Set.of(
+            Constantes.QUIEN_ES_COORDINADOR, Constantes.SHUTDOWN_GRACEFUL,
+            Constantes.VER_METRICAS_COORD, Constantes.ESTADO_REPLICACION,
+            Constantes.REGISTRAR_NODO, Constantes.DESREGISTRAR_NODO,
+            Constantes.ESTADO_MEMBRESIA, Constantes.SHUTDOWN_PROXY);
 
     public static boolean esOperacionEscritura(String operacion) {
         return ESCRITURAS.contains(operacion);
+    }
+
+    public static boolean esOperacionControl(String operacion) {
+        return CONTROL.contains(operacion);
     }
 }

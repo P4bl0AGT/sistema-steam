@@ -39,11 +39,20 @@ public class WatchdogServidor {
     private record ServidorInfo(String nombre, int puerto, String clase, String nodo) {
         /** Construye el comando de arranque idéntico al de los scripts .bat. */
         String[] comando() {
-            return new String[]{
-                "java",
-                "-cp", "sistema-steam.jar" + File.pathSeparator + "lib" + File.separator + "gson-2.10.1.jar",
-                clase, nodo
-            };
+            List<String> comando = new ArrayList<>();
+            String ejecutable = System.getProperty("os.name").startsWith("Windows")
+                    ? "java.exe" : "java";
+            comando.add(new File(System.getProperty("java.home"),
+                    "bin" + File.separator + ejecutable).getPath());
+            comando.add("-Dsteam.config=" + System.getProperty("steam.config",
+                    System.getenv().getOrDefault("STEAM_CONFIG", "config/steam.properties")));
+            String secret = System.getProperty("steam.control.secret");
+            if (secret != null && !secret.isBlank()) comando.add("-Dsteam.control.secret=" + secret);
+            comando.add("-cp");
+            comando.add(System.getProperty("java.class.path"));
+            comando.add(clase);
+            comando.add(nodo);
+            return comando.toArray(String[]::new);
         }
     }
 
@@ -63,6 +72,7 @@ public class WatchdogServidor {
     // ── Punto de entrada ──────────────────────────────────────────────────────
 
     public static void main(String[] args) {
+        Configuracion.validarArranque();
         GestorLog.configurar("WatchdogServidor");
         new WatchdogServidor().iniciar();
     }
@@ -89,6 +99,10 @@ public class WatchdogServidor {
     }
 
     private void verificarTodos() {
+        if (new File("target/run/shutdown.marker").exists()) {
+            LOG.fine("[WATCHDOG] Apagado administrado activo; no se reinician procesos.");
+            return;
+        }
         for (ServidorInfo sv : servidores) {
             verificar(sv);
         }
@@ -127,14 +141,13 @@ public class WatchdogServidor {
     private boolean estaVivo(int puerto) {
         try {
             MensajeProtocolo ping = MensajeProtocolo.request(Constantes.HEALTH_CHECK, null);
-            try (Socket s = new Socket(Constantes.HOST, puerto)) {
-                s.setSoTimeout(Constantes.TIMEOUT_MS);
+            try (Socket s = Transporte.conectar(Constantes.HOST, puerto)) {
                 PrintWriter   pw = new PrintWriter(
                         new OutputStreamWriter(s.getOutputStream(), StandardCharsets.UTF_8), true);
                 BufferedReader br = new BufferedReader(
                         new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
                 pw.println(ping.toJson());
-                String resp = br.readLine();
+                String resp = LineaJson.leer(br);
                 MensajeProtocolo r = MensajeProtocolo.fromJson(resp);
                 return r != null && r.isOk();
             }
@@ -158,6 +171,13 @@ public class WatchdogServidor {
             pb.redirectError(ProcessBuilder.Redirect.appendTo(logErr));
 
             Process p = pb.start();
+            File runDir = new File("target/run");
+            if (!runDir.exists() && !runDir.mkdirs()) {
+                LOG.warning("[WATCHDOG] No se pudo crear " + runDir);
+            }
+            java.nio.file.Files.writeString(new File(runDir,
+                    "watchdog-" + sv.nombre() + ".pid").toPath(), Long.toString(p.pid()),
+                    StandardCharsets.US_ASCII);
             LOG.info("[WATCHDOG] " + sv.nombre() + " reiniciado. PID=" + p.pid()
                     + " | log=" + logOut.getPath());
         } catch (IOException e) {

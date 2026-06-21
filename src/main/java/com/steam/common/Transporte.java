@@ -6,6 +6,7 @@ import javax.net.ssl.SSLServerSocket;
 import javax.net.ssl.SSLServerSocketFactory;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.SSLParameters;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -25,6 +26,9 @@ public final class Transporte {
             socket.setSoTimeout(Configuracion.readTimeoutMs());
             if (socket instanceof SSLSocket ssl) {
                 ssl.setEnabledProtocols(new String[]{"TLSv1.3", "TLSv1.2"});
+                SSLParameters parameters = ssl.getSSLParameters();
+                parameters.setEndpointIdentificationAlgorithm("HTTPS");
+                ssl.setSSLParameters(parameters);
                 ssl.startHandshake();
             }
         } catch (IOException e) {
@@ -51,6 +55,13 @@ public final class Transporte {
             throw e;
         }
         return server;
+    }
+
+    /** Acepta una conexion y limita cuanto puede bloquear una lectura entrante. */
+    public static Socket aceptar(ServerSocket server) throws IOException {
+        Socket socket = server.accept();
+        socket.setSoTimeout(Configuracion.readTimeoutMs());
+        return socket;
     }
 }
 

@@ -21,3 +21,6 @@
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Local modernization assistant artifacts
+/.github/modernize/

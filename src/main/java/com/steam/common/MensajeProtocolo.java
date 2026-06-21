@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.text.Normalizer;
+import java.util.Locale;
 
 /**
  * POJO que actúa como sobre de comunicación entre todos los componentes.
@@ -70,19 +72,25 @@ public class MensajeProtocolo {
 
     private static String inferirCodigo(String m) {
         if (m == null) return "UNCLASSIFIED_ERROR";
-        if (m.contains("BD no disponible")) return "SERVICE_UNAVAILABLE";
-        if (m.contains("Token") || m.contains("Credenciales") || m.contains("Contraseña"))
+        String texto = Normalizer.normalize(m, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "").toLowerCase(Locale.ROOT);
+        if (texto.contains("bd no disponible") || texto.contains("servicio no disponible"))
+            return "SERVICE_UNAVAILABLE";
+        if (texto.contains("token") || texto.contains("credenciales")
+                || texto.contains("contrasena") || texto.contains("sesion"))
             return "AUTHENTICATION_FAILED";
-        if (m.contains("Acceso denegado") || m.contains("se requiere rol"))
+        if (texto.contains("acceso denegado") || texto.contains("se requiere rol")
+                || texto.contains("no eres el propietario"))
             return "AUTHORIZATION_DENIED";
-        if (m.contains("persistencia")) return "PERSISTENCE_ERROR";
-        if (m.contains("Falta") || m.contains("requerido") || m.contains("Campos requeridos"))
+        if (texto.contains("persistencia")) return "PERSISTENCE_ERROR";
+        if (texto.contains("falta") || texto.contains("requerido")
+                || texto.contains("invalido") || texto.contains("fuera de formato"))
             return "BUSINESS_INVALID_REQUEST";
-        if (m.contains("ya existe") || m.contains("Ya tienes") || m.contains("Ya posees"))
+        if (texto.contains("ya existe") || texto.contains("ya tienes") || texto.contains("ya posees"))
             return "BUSINESS_CONFLICT";
-        if (m.contains("no encontrad") || m.contains("no soportada"))
+        if (texto.contains("no encontrad") || texto.contains("no soportada"))
             return "BUSINESS_NOT_FOUND";
-        if (m.contains("Sin stock")) return "BUSINESS_NO_STOCK";
+        if (texto.contains("sin stock")) return "BUSINESS_NO_STOCK";
         return "UNCLASSIFIED_ERROR";
     }
 

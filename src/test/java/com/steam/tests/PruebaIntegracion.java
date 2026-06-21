@@ -23,6 +23,8 @@ public final class PruebaIntegracion {
         String comprador1 = login("cliente2", "pass123");
         String comprador2 = login("cliente3", "pass123");
         String admin = login("admin", "admin123");
+        check(enviar(request(Constantes.ESTADO_REPLICACION, null), "control-proxy").isOk(),
+                "Control firmado atraviesa el proxy sin alterar su prueba");
 
         String nombre = "Juego mutex " + System.currentTimeMillis();
         MensajeProtocolo publicar = request(Constantes.PUBLICAR_JUEGO, vendedor)
@@ -55,9 +57,34 @@ public final class PruebaIntegracion {
         Future<MensajeProtocolo> d = segundaCompra.submit(
                 () -> comprar(segundoInicio, comprador2, juegoId, "c4"));
         segundoInicio.countDown();
-        check(List.of(c.get(), d.get()).stream().filter(MensajeProtocolo::isOk).count() == 1L,
+        List<MensajeProtocolo> segundaRonda = List.of(c.get(), d.get());
+        check(segundaRonda.stream().filter(MensajeProtocolo::isOk).count() == 1L,
                 "Stock cancelado se vende una sola vez");
         segundaCompra.shutdownNow();
+
+        int segundoGanador = segundaRonda.get(0).isOk() ? 0 : 1;
+        String segundoToken = segundoGanador == 0 ? comprador1 : comprador2;
+        MensajeProtocolo pago = request(Constantes.CONFIRMAR_PAGO, segundoToken)
+                .put("reservaId", segundaRonda.get(segundoGanador).getString("reservaId"));
+        check(enviar(pago, "pago").isOk(), "Pago confirma la venta");
+
+        String contenido = "integracion-" + System.currentTimeMillis();
+        MensajeProtocolo mensaje = request(Constantes.ENVIAR_MENSAJE, comprador1)
+                .put("receptor", "cliente3").put("contenido", contenido);
+        check(enviar(mensaje, "mensaje").isOk(), "Envio de mensaje");
+        MensajeProtocolo recibidos = enviar(
+                request(Constantes.VER_MENSAJES, comprador2), "recibir");
+        check(recibidos.isOk() && contieneMensaje(recibidos.get("mensajes"), contenido),
+                "Recepcion de mensaje pendiente");
+        List<String> idsRecibidos = idsMensajes(recibidos.get("mensajes"));
+        check(!idsRecibidos.isEmpty() && enviar(request(
+                Constantes.CONFIRMAR_ENTREGA_MENSAJES, comprador2)
+                .put("mensajeIds", idsRecibidos), "ack-mensaje").isOk(),
+                "Confirmacion explicita de entrega");
+        MensajeProtocolo despuesAck = enviar(
+                request(Constantes.VER_MENSAJES, comprador2), "despues-ack");
+        check(despuesAck.isOk() && !contieneMensaje(despuesAck.get("mensajes"), contenido),
+                "Mensaje confirmado no se vuelve a entregar");
 
         MensajeProtocolo saldoInicial = enviar(request(Constantes.VER_SALDO, comprador2), "saldo");
         double antes = saldoInicial.getDouble("saldo");
@@ -87,6 +114,8 @@ public final class PruebaIntegracion {
                 "Replica de juegos converge byte a byte");
         check(hash("data/sesiones-1/Main.json").equals(hash("data/sesiones-2/Main.json")),
                 "Replica de sesiones converge byte a byte");
+        check(hash("data/mensajeria-1/Main.json").equals(hash("data/mensajeria-2/Main.json")),
+                "Replica de mensajeria converge byte a byte");
 
         System.out.println("OK pruebas_integracion=" + pruebas + " ultimo_stock_exitos=" + exitos);
     }
@@ -116,6 +145,20 @@ public final class PruebaIntegracion {
         MensajeProtocolo copia = MensajeProtocolo.fromJson(original.toJson());
         copia.setRequestId(requestId);
         return copia;
+    }
+
+    private static boolean contieneMensaje(Object raw, String contenido) {
+        if (!(raw instanceof List<?> mensajes)) return false;
+        return mensajes.stream().anyMatch(item -> item instanceof java.util.Map<?, ?> mapa
+                && contenido.equals(String.valueOf(mapa.get("contenido"))));
+    }
+
+    private static List<String> idsMensajes(Object raw) {
+        if (!(raw instanceof List<?> mensajes)) return List.of();
+        return mensajes.stream().filter(java.util.Map.class::isInstance)
+                .map(java.util.Map.class::cast)
+                .map(m -> String.valueOf(m.get("id")))
+                .filter(id -> !"null".equals(id)).toList();
     }
 
     private static String hash(String archivo) throws Exception {

@@ -42,8 +42,9 @@ public class svMensajeria {
     private final RelojLamport                   relojLamport;
     private final GestorPersistencia<BDMensajeria> gp;
     private final ReplicadorEstado<BDMensajeria> replicador;
-    private final CacheIdempotencia               idempotencia = new CacheIdempotencia();
-    private final ExecutorService                pool = Executors.newFixedThreadPool(Constantes.POOL_SIZE);
+    private final CacheIdempotencia               idempotencia;
+    private final CacheIdempotencia               idempotenciaLecturas = new CacheIdempotencia();
+    private final ExecutorService                pool = Ejecutores.acotado("mensajeria-worker", Constantes.POOL_SIZE, false);
     private final Object                         lock = new Object();
 
     // ── Constructor ───────────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ public class svMensajeria {
     public svMensajeria(int nodo, int puerto) {
         this.nodo = nodo;
         this.puerto = puerto;
+        this.idempotencia = new CacheIdempotencia(RutasDatos.idempotencia("mensajeria", nodo));
         this.relojLamport = new RelojLamport("MSG-" + nodo);
         this.gp     = new GestorPersistencia<>(
                 RutasDatos.main("mensajeria", nodo), RutasDatos.copy("mensajeria", nodo),
@@ -73,6 +75,7 @@ public class svMensajeria {
     // ── Punto de entrada ──────────────────────────────────────────────────────
 
     public static void main(String[] args) {
+        Configuracion.validarArranque();
         int nodo   = args.length > 0 ? Integer.parseInt(args[0]) : 1;
         int puerto = (nodo == 2) ? Constantes.PUERTO_MSG_2 : Constantes.PUERTO_MSG_1;
         GestorLog.configurar("svMensajeria-" + nodo);
@@ -92,7 +95,8 @@ public class svMensajeria {
                 0, 0, puertoRepl);
 
         Runtime.getRuntime().addShutdownHook(new Thread(
-            () -> { sv.replicador.stop(); RegistradorProxy.desregistrar("MENSAJERIA", puerto); },
+            () -> { snap.stop(); sv.replicador.stop();
+                    RegistradorProxy.desregistrar("MENSAJERIA", puerto); },
             "shutdown-mensajeria-" + nodo
         ));
 
@@ -103,11 +107,13 @@ public class svMensajeria {
         LOG.info("=== svMensajeria iniciado en puerto " + puerto + " ===");
         try (ServerSocket server = Transporte.servidor(puerto)) {
             while (true) {
-                Socket cliente = server.accept();
+                Socket cliente = Transporte.aceptar(server);
                 pool.submit(() -> manejarCliente(cliente));
             }
         } catch (IOException e) {
             LOG.severe("Error en svMensajeria:" + puerto + " → " + e.getMessage());
+        } finally {
+            pool.shutdownNow();
         }
     }
 
@@ -120,10 +126,21 @@ public class svMensajeria {
              PrintWriter    out = new PrintWriter(
                      new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true)) {
 
-            String linea = LineaJson.leer(in, Configuracion.maxMessageBytes());
+            String linea;
+            try { linea = LineaJson.leer(in, Configuracion.maxMessageBytes()); }
+            catch (LineaJson.MensajeDemasiadoGrandeException e) {
+                out.println(MensajeProtocolo.error("?", "MESSAGE_TOO_LARGE", e.getMessage()).toJson());
+                return;
+            }
             if (linea == null) return;
 
-            MensajeProtocolo req = MensajeProtocolo.fromJson(linea);
+            MensajeProtocolo req;
+            try { req = MensajeProtocolo.fromJson(linea); }
+            catch (RuntimeException e) {
+                out.println(MensajeProtocolo.error("?", "JSON_MALFORMADO",
+                        "Mensaje JSON mal formado").toJson());
+                return;
+            }
             String error = SeguridadMensajes.validarSolicitud(req);
             if (error != null) {
                 out.println(MensajeProtocolo.error(req == null ? "?" : req.getRequestId(),
@@ -132,7 +149,11 @@ public class svMensajeria {
             }
             relojLamport.update(req.getLamportClock());
 
-            MensajeProtocolo resp = idempotencia.ejecutar(req.getRequestId(), () -> procesar(req));
+            boolean escrituraDurable = Utils.esOperacionEscritura(req.getOperacion())
+                    && nodo == Configuracion.writerNodeId("MENSAJERIA")
+                    && replicador.isListoParaEscrituras();
+            CacheIdempotencia cache = escrituraDurable ? idempotencia : idempotenciaLecturas;
+            MensajeProtocolo resp = cache.ejecutar(req, () -> procesar(req));
             resp.setLamportClock(relojLamport.tick());
             resp.setEmisor("MSG-" + nodo);
             resp.setReceptor(req.getEmisor());
@@ -149,11 +170,15 @@ public class svMensajeria {
 
     private MensajeProtocolo procesar(MensajeProtocolo req) {
         if (req == null) return MensajeProtocolo.error("?", "INVALID_REQUEST", "Mensaje inválido");
-        if (Utils.esOperacionEscritura(req.getOperacion())
-                && nodo != Configuracion.writerNodeId("MENSAJERIA")
-                && replicador.isPeerAlcanzable()) {
-            return MensajeProtocolo.error(req.getRequestId(), "NOT_PRIMARY",
-                    "Nodo secundario de mensajeria; escritor=" + Configuracion.writerNodeId("MENSAJERIA"));
+        if (Utils.esOperacionEscritura(req.getOperacion())) {
+            if (nodo != Configuracion.writerNodeId("MENSAJERIA")) {
+                return MensajeProtocolo.error(req.getRequestId(), "NOT_PRIMARY",
+                        "Nodo secundario de mensajeria; escritor=" + Configuracion.writerNodeId("MENSAJERIA"));
+            }
+            if (!replicador.isListoParaEscrituras()) {
+                return MensajeProtocolo.error(req.getRequestId(), "SERVICE_UNAVAILABLE",
+                        "Writer de mensajeria reconciliando su estado");
+            }
         }
         boolean esHC = Constantes.HEALTH_CHECK.equals(req.getOperacion());
         LOG.log(esHC ? Level.FINE : Level.INFO,
@@ -165,6 +190,7 @@ public class svMensajeria {
             case Constantes.ESTADO_REPLICACION -> estadoReplicacion(req);
             case Constantes.ENVIAR_MENSAJE  -> enviarMensaje(req);
             case Constantes.VER_MENSAJES    -> verMensajes(req);
+            case Constantes.CONFIRMAR_ENTREGA_MENSAJES -> confirmarEntrega(req);
             case Constantes.VER_CONVERSACION -> verConversacion(req);
             default -> MensajeProtocolo.error(req.getRequestId(), "UNKNOWN_OPERATION",
                     "Operación no soportada: " + req.getOperacion());
@@ -176,6 +202,7 @@ public class svMensajeria {
     private MensajeProtocolo healthCheck(MensajeProtocolo req) {
         MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "svMensajeria OK");
         resp.put("puerto", puerto);
+        resp.put("writerReady", replicador.isListoParaEscrituras());
         return resp;
     }
 
@@ -211,6 +238,11 @@ public class svMensajeria {
         if (receptor == null || contenido == null || contenido.isBlank()) {
             return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_INVALID_REQUEST",
                     "Faltan campos: receptor, contenido");
+        }
+        receptor = receptor.trim();
+        if (!Utils.usernameValido(receptor) || !ValidadorToken.usuarioExiste(receptor)) {
+            return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_NOT_FOUND",
+                    "Usuario receptor no encontrado");
         }
         if (contenido.length() > 4096) {
             return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_INVALID_REQUEST",
@@ -253,8 +285,8 @@ public class svMensajeria {
     /**
      * VER_MENSAJES – Fase 2 y 3: entrega de mensajes pendientes.
      *
-     * Retorna todos los mensajes no entregados dirigidos al usuario autenticado
-     * y los marca como entregados (ACK implícito).
+     * Retorna los mensajes no entregados sin cambiar su estado. El cliente
+     * confirma después de mostrarlos mediante CONFIRMAR_ENTREGA_MENSAJES.
      * Implementa la recuperación offline: cuando el usuario se conecta,
      * recibe todos sus mensajes pendientes.
      */
@@ -273,28 +305,10 @@ public class svMensajeria {
                     .filter(m -> m.receptor.equals(auth.username()) && !m.entregado)
                     .collect(Collectors.toList());
 
-            // Marcar como entregados (ACK)
-            boolean cambios = !pendientes.isEmpty();
-            pendientes.forEach(m -> { m.entregado = true; m.leido = true; });
-
-            long ahora = System.currentTimeMillis();
-            long retencionMs = 7L * 24 * 60 * 60 * 1000;
-            int antes = bd.mensajes.size();
-            bd.mensajes.removeIf(m -> m.entregado && m.leido && ahora - m.timestamp > retencionMs);
-            if (bd.mensajes.size() < antes) cambios = true;
-
-            if (cambios) {
-                try {
-                    guardarReplicado(bd, req.getRequestId());
-                } catch (IOException e) {
-                    return MensajeProtocolo.error(req.getRequestId(),
-                            "PERSISTENCE_ERROR", "No se pudo persistir la entrega");
-                }
-            }
-
             List<Map<String, Object>> lista = pendientes.stream()
                     .map(m -> {
                         Map<String, Object> info = new LinkedHashMap<>();
+                        info.put("id",        m.id);
                         info.put("de",        m.emisor);
                         info.put("contenido", m.contenido);
                         info.put("fecha",     new java.util.Date(m.timestamp).toString());
@@ -305,6 +319,43 @@ public class svMensajeria {
             MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(),
                     "Mensajes pendientes: " + lista.size());
             resp.put("mensajes", lista);
+            return resp;
+        }
+    }
+
+    private MensajeProtocolo confirmarEntrega(MensajeProtocolo req) {
+        ValidadorToken.ResultadoValidacion auth = ValidadorToken.validar(req.getToken());
+        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(),
+                "AUTHENTICATION_FAILED", auth.mensaje());
+        Object raw = req.get("mensajeIds");
+        if (!(raw instanceof List<?> lista) || lista.isEmpty() || lista.size() > 1_000) {
+            return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_INVALID_REQUEST",
+                    "mensajeIds debe contener entre 1 y 1000 identificadores");
+        }
+        Set<String> ids = lista.stream().map(String::valueOf).collect(Collectors.toSet());
+        synchronized (lock) {
+            BDMensajeria bd = gp.leer();
+            if (bd == null) return MensajeProtocolo.error(req.getRequestId(),
+                    "SERVICE_UNAVAILABLE", "BD no disponible");
+            int confirmados = 0;
+            for (Mensaje mensaje : bd.mensajes) {
+                if (ids.contains(mensaje.id) && auth.username().equals(mensaje.receptor)) {
+                    if (!mensaje.entregado) confirmados++;
+                    mensaje.entregado = true;
+                    mensaje.leido = true;
+                }
+            }
+            long limite = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000;
+            bd.mensajes.removeIf(m -> m.entregado && m.leido && m.timestamp < limite);
+            try {
+                guardarReplicado(bd, req.getRequestId());
+            } catch (IOException e) {
+                return MensajeProtocolo.error(req.getRequestId(), "PERSISTENCE_ERROR",
+                        "No se pudo persistir la confirmacion");
+            }
+            MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(),
+                    "Entrega confirmada");
+            resp.put("confirmados", confirmados);
             return resp;
         }
     }
@@ -355,8 +406,9 @@ public class svMensajeria {
         }
     }
     private ReplicadorEstado.Resultado guardarReplicado(BDMensajeria bd, String requestId) throws IOException {
-        gp.guardar(bd);
-        ReplicadorEstado.Resultado resultado = replicador.registrarCambioLocal(bd, requestId);
+        ReplicadorEstado.Resultado resultado;
+        try { resultado = replicador.registrarCambioLocal(bd, requestId); }
+        catch (IllegalStateException e) { throw new IOException(e.getMessage(), e); }
         LOG.info("[REPL] requestId=" + requestId + " version=" + resultado.version()
                 + " confirmada=" + resultado.confirmada());
         return resultado;

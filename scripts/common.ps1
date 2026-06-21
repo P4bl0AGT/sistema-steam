@@ -10,19 +10,17 @@ function Get-SteamJava {
             Sort-Object Name -Descending | ForEach-Object FullName)
     $exe = $candidates | ForEach-Object { Join-Path $_ 'bin\java.exe' } |
             Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $exe) {
+        $pathJava = Get-Command java.exe -ErrorAction SilentlyContinue
+        if ($pathJava) { $exe = $pathJava.Source }
+    }
     if (-not $exe) { throw 'No se encontro java.exe en un JDK completo' }
     return $exe
 }
 
 function Test-SteamPort([int]$Port, [int]$TimeoutMs = 250) {
-    $client = [Net.Sockets.TcpClient]::new()
-    try {
-        $async = $client.BeginConnect('localhost', $Port, $null, $null)
-        if (-not $async.AsyncWaitHandle.WaitOne($TimeoutMs)) { return $false }
-        $client.EndConnect($async)
-        return $client.Connected
-    } catch { return $false }
-    finally { $client.Dispose() }
+    $listeners = [Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners()
+    return $listeners.Port -contains $Port
 }
 
 function Wait-SteamPort([int]$Port, [int]$TimeoutSec = 30) {
@@ -48,13 +46,20 @@ function Start-SteamProcess([string]$Name, [string]$Class, [string[]]$Extra = @(
 
 function Stop-SteamPids {
     $pidFile = Join-Path $SteamRunDir 'pids.json'
-    if (-not (Test-Path $pidFile)) { return }
-    $items = Get-Content -Raw $pidFile | ConvertFrom-Json
+    $items = @()
+    if (Test-Path $pidFile) {
+        $parsed = Get-Content -Raw $pidFile | ConvertFrom-Json
+        foreach ($entry in $parsed) { $items += $entry }
+    }
+    Get-ChildItem $SteamRunDir -Filter 'watchdog-*.pid' -ErrorAction SilentlyContinue |
+            ForEach-Object { $items += [pscustomobject]@{ Name=$_.BaseName; Pid=[int](Get-Content -Raw $_.FullName) } }
     foreach ($item in $items) {
         $process = Get-Process -Id ([int]$item.Pid) -ErrorAction SilentlyContinue
         if ($process) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
     }
     Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
+    Get-ChildItem $SteamRunDir -Filter 'watchdog-*.pid' -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
 }
 
 function Get-SteamPidItems {

@@ -1,6 +1,6 @@
 # Sistema Steam Distribuido
 
-Proyecto de ICI-4344 Computación Paralela y Distribuida. Implementa una plataforma tipo Steam en Java 17 con múltiples JVM, proxies redundantes, replicación por TCP, membresía dinámica, relojes de Lamport, elección Bully y exclusión mutua distribuida.
+Proyecto de ICI-4344 Computación Paralela y Distribuida. Implementa una plataforma tipo Steam en Java 17 con múltiples JVM, proxies redundantes, topología base con membresía renovable, replicación por TCP, relojes de Lamport, elección Bully y exclusión mutua distribuida.
 
 ## Inicio rápido
 
@@ -23,15 +23,19 @@ El script:
 3. Elimina datos de ejecuciones anteriores.
 4. Inicia 8 JVM y 18 puertos.
 5. Ejecuta las pruebas de integración y concurrencia.
-6. Detiene todos los procesos al terminar.
+6. Derriba el writer de juegos y comprueba lecturas sin escrituras en el secundario.
+7. Detiene todos los procesos al terminar.
 
 Una ejecución correcta termina aproximadamente así:
 
 ```text
-OK pruebas_componentes=55
-[OK] Build Java 17: 49 fuentes, 3 pruebas.
+OK pruebas_componentes=69
+[OK] Build Java 17: 51 fuentes, 6 pruebas.
+OK writers_reconciliados=3
 [OK] Sistema iniciado: 8 JVM, 2 proxies, 18 puertos.
-OK pruebas_integracion=13 ultimo_stock_exitos=1
+OK pruebas_integracion=20 ultimo_stock_exitos=1
+OK writer_caido=4
+OK idempotencia_reinicio_verificada=2
 [OK] Suite completa aprobada.
 [OK] Procesos registrados detenidos.
 ```
@@ -46,6 +50,8 @@ OK pruebas_integracion=13 ultimo_stock_exitos=1
 - Puertos del proyecto disponibles.
 
 No se necesita Maven. Gson está incluido en `lib/` y `scripts/1_build.ps1` compila directamente con `javac --release 17`.
+El `pom.xml` es una alternativa para IDE/CI; `mvn test` también ejecuta
+`PruebasComponentes`, pero la ruta oficial de demostración sigue siendo la de scripts.
 
 Comprueba Java con:
 
@@ -98,7 +104,7 @@ El mismo archivo puede ejecutarse varias veces. Cada ventana corresponde a un cl
 scripts\stop_all.bat
 ```
 
-No cierres procesos Java al azar desde el Administrador de tareas. `stop_all.bat` sólo termina los procesos registrados por `start_all.bat`.
+No cierres procesos Java al azar desde el Administrador de tareas. `stop_all.bat` termina los procesos registrados por `start_all.bat`, también los recreados por el watchdog, y deja una marca que impide reinicios durante el apagado.
 
 ## Usuarios de demostración
 
@@ -119,6 +125,8 @@ No cierres procesos Java al azar desde el Administrador de tareas. `stop_all.bat
 5. Consultar saldo, reservas e historial.
 6. Enviar un mensaje a `cliente2`.
 7. Abrir otro cliente como `cliente2` y recibir el mensaje.
+
+La lectura no marca un mensaje como entregado hasta que el cliente lo muestra y envía un ACK explícito. Si ese ACK falla, el mensaje vuelve a aparecer en la siguiente consulta.
 
 Los mensajes cuyo contenido comienza con `carga-` provienen del generador de carga. Para comenzar sin ellos, detén y reinicia los datos:
 
@@ -155,11 +163,15 @@ La suite comprueba, entre otros puntos:
 
 - Incrementos concurrentes del reloj de Lamport.
 - Deduplicación concurrente por `requestId`.
+- Rechazo de un `requestId` reutilizado con otro payload.
 - Firmas HMAC y detección de alteraciones.
 - Integridad del payload completo y SHA-256 para snapshots replicados.
 - Rechazo de escrituras directas en nodos secundarios.
+- Idempotencia durable tras reconstruir la caché en una JVM nueva.
+- Persistencia de la versión dentro del mismo snapshot de estado.
 - Conservación de métricas acumuladas tras reiniciar una JVM.
 - Expiración de sesiones.
+- Entrega de mensajes con ACK explícito.
 - Orden determinista `(Lamport, nodo, id)`.
 - Login y operaciones a través de proxies redundantes.
 - Replicación byte a byte entre almacenamientos independientes.
@@ -231,9 +243,15 @@ Los archivos quedan bajo `evidencia/carga/<fecha>/`.
 
 ## Consistencia de escrituras
 
-Cada servicio tiene un único escritor configurado (`steam.<servicio>.writer.node`, nodo 1 por defecto). Los proxies envían las escrituras a ese nodo y los secundarios rechazan una escritura directa con `NOT_PRIMARY`. Las lecturas pueden seguir repartiéndose entre réplicas.
+Cada servicio tiene un único escritor configurado (`steam.<servicio>.writer.node`, nodo 1 por defecto). Los proxies envían las escrituras exclusivamente a ese nodo y los secundarios rechazan siempre una escritura directa con `NOT_PRIMARY`. Por defecto, las lecturas también prefieren el writer para conservar read-your-writes; si éste cae, pueden degradar a una réplica con consistencia eventual.
 
-Esta decisión evita que dos snapshots concurrentes converjan perdiendo una actualización. El costo deliberado es disponibilidad: si el escritor cae, las lecturas continúan, pero las escrituras se rechazan hasta que ese nodo vuelve o se realiza una promoción administrada cambiando la configuración y reiniciando de forma consistente todo el despliegue.
+Al arrancar, cada writer permanece sin aceptar escrituras hasta reconciliar su versión con el peer. Los ACK de réplica deben coincidir exactamente en servicio, peer, `requestId` y versión; una versión mayor ya no confirma una escritura anterior. Las versiones incluyen el identificador del writer y el snapshot lleva esa misma versión embebida.
+
+Esta decisión evita que dos snapshots concurrentes converjan perdiendo una actualización. El costo deliberado es disponibilidad: si el escritor cae, las lecturas continúan desde una réplica, pero las escrituras se rechazan hasta que ese nodo vuelve o se realiza una promoción administrada cambiando la configuración y reiniciando de forma consistente todo el despliegue. La replicación usa snapshots completos versionados; no es consenso ni consistencia fuerte durante fallos.
+
+Juegos y mensajería guardan antes de cada escritura un marcador idempotente local y conservan la respuesta durante 30 días. Si una JVM cae con una operación en curso, el reintento devuelve `REQUEST_OUTCOME_UNKNOWN` en vez de repetir silenciosamente el efecto. Una promoción administrada debe conservar también `IDEMPOTENCIA.json` del writer anterior o comenzar con una frontera explícita de nuevos `requestId`.
+
+Bully recupera al coordinador ante un crash observable. Con sólo dos nodos no puede distinguir un crash de una partición y mantener a la vez disponibilidad y un coordinador único; la protección de los datos frente a ese caso la aporta el writer fijo, no Bully.
 
 La evidencia compacta validada está en `evidencia/final-50x60-validada/`. La corrida registrada obtuvo:
 
@@ -264,7 +282,7 @@ Para compilar, reiniciar datos, ejecutar carga 50×60, derribar el coordinador d
 
 ## TLS y mTLS
 
-El perfil normal usa TCP local para facilitar la demostración. Existe un perfil TLS con autenticación mutua.
+El perfil normal usa TCP limitado a `127.0.0.1` para facilitar la demostración. Existe un perfil TLS con autenticación mutua y verificación del hostname. Para distribuir procesos entre máquinas hay que cambiar explícitamente `steam.bind.host`, `steam.advertised.host` y los hosts de cada servicio.
 
 Genera certificados locales:
 
@@ -297,6 +315,8 @@ $env:STEAM_DEMO_MODE = 'false'
 ```
 
 Con modo demo desactivado, el sistema no arranca sin `STEAM_CONTROL_SECRET` (o la propiedad JVM equivalente). La firma de control cubre el sobre y el payload canónico completos; Bully, mutex y replicación conservan firmas específicas.
+El modo demo rechaza además cualquier `steam.bind.host` que no sea loopback.
+Las sesiones tienen vida absoluta configurada por `steam.token.ttl.ms`; validarlas no renueva el vencimiento. Los tokens nuevos se persisten como SHA-256 y el login bloquea temporalmente un usuario después de cinco fallos en un minuto.
 
 ## Arranque manual por ventanas
 

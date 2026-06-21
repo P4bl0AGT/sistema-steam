@@ -1,5 +1,8 @@
 # Auditoria inicial contra la pauta final ICI-4344
 
+> **Documento historico de linea base.** Sus estados no describen la version
+> actual; se conserva para mostrar la evolucion del proyecto.
+
 Fecha de linea base: 20-06-2026. Commit inspeccionado:
 `f5ee219cea4dcc3e6179b68a5f5ec4cff820e0e7`.
 

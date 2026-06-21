@@ -14,12 +14,12 @@ import java.util.logging.Logger;
  * MODELO DE FALLOS: intenta svSesiones nodo 1 (8081) primero;
  * si no responde en TIMEOUT_MS, conmuta al nodo 2 (8181).
  *
- * CACHÉ IN-MEMORY (TTL 30 s):
+ * CACHÉ IN-MEMORY (TTL 2 s):
  * Cada llamada a validar() abría una nueva conexión TCP a svSesiones,
  * sumando 1 conexión extra por cada operación de negocio. El caché
  * elimina esa latencia para el caso frecuente (token recién validado).
  * Tradeoff aceptado: un token invalidado por LOGOUT puede seguir siendo
- * aceptado hasta 30 s; correcto para el contexto académico de este sistema.
+ * aceptado durante un máximo aproximado de 2 s.
  */
 public class ValidadorToken {
 
@@ -35,6 +35,7 @@ public class ValidadorToken {
 
     /** ConcurrentHashMap: seguro para acceso desde múltiples hilos del pool. */
     private static final Map<String, CachedResult> cache = new ConcurrentHashMap<>();
+    private static final Map<String, Long> usuariosExistentes = new ConcurrentHashMap<>();
 
     // ── API pública ───────────────────────────────────────────────────────────
 
@@ -58,10 +59,9 @@ public class ValidadorToken {
         MensajeProtocolo req = MensajeProtocolo.request(Constantes.VALIDAR_TOKEN, token);
         req.setTipo(MensajeProtocolo.TIPO_REQUEST);
 
-        Endpoint[] destinos = {
-                new Endpoint(Configuracion.hostServicio("sesiones", 1), Constantes.PUERTO_SES_1),
-                new Endpoint(Configuracion.hostServicio("sesiones", 2), Constantes.PUERTO_SES_2)
-        };
+        int writer = Configuracion.writerNodeId("SESIONES");
+        int alterno = writer == 1 ? 2 : 1;
+        Endpoint[] destinos = { endpointSesiones(writer), endpointSesiones(alterno) };
         for (Endpoint destino : destinos) {
             try {
                 MensajeProtocolo resp = enviarYRecibir(req, destino);
@@ -74,8 +74,11 @@ public class ValidadorToken {
                     return resultado;
                 }
                 if (resp != null) {
-                    // Token inválido: no cachear (podría ser un error transitorio)
-                    return new ResultadoValidacion(false, null, null, resp.getMensaje());
+                    if ("AUTHENTICATION_FAILED".equals(resp.getCodigoError())) {
+                        return new ResultadoValidacion(false, null, null, resp.getMensaje());
+                    }
+                    LOG.fine("Respuesta transitoria de sesiones " + destino + ": "
+                            + resp.getCodigoError());
                 }
             } catch (Exception e) {
                 LOG.warning("svSesiones " + destino + " no disponible. " + e.getMessage());
@@ -106,5 +109,36 @@ public class ValidadorToken {
             String respJson = LineaJson.leer(in, Configuracion.maxMessageBytes());
             return respJson != null ? MensajeProtocolo.fromJson(respJson) : null;
         }
+    }
+
+    /** Consulta autenticada al servicio de sesiones sin exponer el listado de usuarios. */
+    public static boolean usuarioExiste(String username) {
+        if (!Utils.usernameValido(username)) return false;
+        Long vigenteHasta = usuariosExistentes.get(username);
+        if (vigenteHasta != null && System.currentTimeMillis() < vigenteHasta) return true;
+        MensajeProtocolo req = MensajeProtocolo.request(Constantes.VALIDAR_USUARIO_INTERNO, null);
+        req.setEmisor("ValidadorToken");
+        req.put("username", username);
+        SeguridadMensajes.firmarControl(req);
+        int writer = Configuracion.writerNodeId("SESIONES");
+        int alterno = writer == 1 ? 2 : 1;
+        for (int nodo : new int[]{writer, alterno}) {
+            try {
+                MensajeProtocolo resp = enviarYRecibir(req, endpointSesiones(nodo));
+                if (resp != null && resp.isOk()) {
+                    boolean existe = resp.isOk() && Boolean.TRUE.equals(resp.get("existe"));
+                    if (existe) usuariosExistentes.put(username, System.currentTimeMillis() + 30_000L);
+                    return existe;
+                }
+            } catch (Exception e) {
+                LOG.fine("No se pudo validar usuario en sesiones-" + nodo + ": " + e.getMessage());
+            }
+        }
+        return false;
+    }
+
+    private static Endpoint endpointSesiones(int nodo) {
+        int puerto = nodo == 2 ? Constantes.PUERTO_SES_2 : Constantes.PUERTO_SES_1;
+        return new Endpoint(Configuracion.hostServicio("sesiones", nodo), puerto);
     }
 }

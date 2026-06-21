@@ -19,6 +19,10 @@ public final class RutasDatos {
         return base(servicio, nodo).resolve("VERSION.txt").toString();
     }
 
+    public static String idempotencia(String servicio, int nodo) {
+        return base(servicio, nodo).resolve("IDEMPOTENCIA.json").toString();
+    }
+
     private static Path base(String servicio, int nodo) {
         String nombre = servicio.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_-]", "-");
         return Path.of(Constantes.DATA_DIR, nombre + "-" + nodo);

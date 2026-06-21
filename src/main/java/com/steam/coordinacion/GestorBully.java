@@ -5,6 +5,8 @@ import com.steam.common.Configuracion;
 import com.steam.common.LineaJson;
 import com.steam.common.RelojLamport;
 import com.steam.common.Transporte;
+import com.steam.common.Ejecutores;
+import com.steam.common.SeguridadMensajes;
 
 import java.io.*;
 import java.net.*;
@@ -57,11 +59,7 @@ public class GestorBully {
     private volatile CountDownLatch okLatch;
     private volatile CountDownLatch coordLatch;
 
-    private final ExecutorService pool = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "bully-worker");
-        t.setDaemon(true);
-        return t;
-    });
+    private final ExecutorService pool = Ejecutores.acotado("bully-worker", 8, true);
     private volatile ServerSocket serverSocket;
 
     // ── Constructor ───────────────────────────────────────────────────────────
@@ -108,7 +106,7 @@ public class GestorBully {
                 LOG.info("[BULLY] Escuchando en puerto " + miPuertoBully);
                 while (!stopped.get()) {
                     try {
-                        Socket cliente = server.accept();
+                        Socket cliente = Transporte.aceptar(server);
                         pool.submit(() -> procesarMensaje(cliente));
                     } catch (IOException e) {
                         if (!stopped.get())
@@ -136,7 +134,11 @@ public class GestorBully {
             if (linea == null) return;
 
             MensajeBully msg = MensajeBully.fromJson(linea);
-            if (msg == null || !msg.firmaValida() || !emisorConocido(msg.emisorId)) return;
+            if (msg == null || !msg.firmaValida() || !msg.esFresco()
+                    || !emisorConocido(msg.emisorId)
+                    || !SeguridadMensajes.aceptarUnaVez("bully-" + miId,
+                    msg.tipo + "|" + msg.emisorId + "|" + msg.coordinadorId + "|"
+                            + msg.lamportClock + "|" + msg.timestamp, msg.timestamp)) return;
             reloj.update(msg.lamportClock);
 
             switch (msg.tipo) {
@@ -157,7 +159,10 @@ public class GestorBully {
                     }
                 }
                 case MensajeBully.COORDINATOR -> {
-                    if (msg.coordinadorId != msg.emisorId) return;
+                    if (msg.coordinadorId != msg.emisorId || msg.coordinadorId < miId) {
+                        pool.submit(this::iniciarEleccion);
+                        return;
+                    }
                     coordinadorActual = msg.coordinadorId;
                     LOG.info("[BULLY] t=" + reloj.get()
                             + " COORDINATOR recibido, nuevo coordinador=" + msg.coordinadorId);
@@ -165,7 +170,7 @@ public class GestorBully {
                     if (latch != null) latch.countDown();
                 }
                 case MensajeBully.HEARTBEAT_COORD -> {
-                    // Respondemos OK para confirmar que seguimos vivos
+                    if (!isCoordinador() || msg.coordinadorId != miId) return;
                     MensajeBully resp = new MensajeBully(
                             MensajeBully.OK, miId, coordinadorActual, reloj.tick());
                     resp.firmar();
@@ -274,7 +279,8 @@ public class GestorBully {
             if (respLine == null) return false;
 
             MensajeBully resp = MensajeBully.fromJson(respLine);
-            if (!resp.firmaValida() || resp.emisorId != peer.id) return false;
+            if (!resp.firmaValida() || !resp.esFresco() || resp.emisorId != peer.id
+                    || resp.timestamp < msg.timestamp) return false;
             reloj.update(resp.lamportClock);
             boolean esOk = MensajeBully.OK.equals(resp.tipo);
             if (esOk) LOG.info("[BULLY] t=" + reloj.get() + " OK recibido de nodo-" + peer.id);
@@ -360,7 +366,8 @@ public class GestorBully {
             String resp = LineaJson.leer(in, Configuracion.maxMessageBytes());
             if (resp != null) {
                 MensajeBully mensaje = MensajeBully.fromJson(resp);
-                if (mensaje.firmaValida() && mensaje.emisorId == coord.id) {
+                if (mensaje.firmaValida() && mensaje.esFresco() && mensaje.emisorId == coord.id
+                        && mensaje.coordinadorId == coord.id && mensaje.timestamp >= hb.timestamp) {
                     reloj.update(mensaje.lamportClock);
                     return true;
                 }

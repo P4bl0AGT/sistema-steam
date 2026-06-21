@@ -17,6 +17,7 @@ public class MensajeReplicacion {
     public String requestId;
     public String payloadJson;
     public long lamportClock;
+    public long timestamp;
     public String firma;
     public String mensaje;
 
@@ -25,11 +26,12 @@ public class MensajeReplicacion {
     public String contenidoFirmable() {
         String payloadHash = payloadJson == null ? "-" : SeguridadMensajes.sha256Texto(payloadJson);
         return tipo + "|" + servicio + "|" + nodoOrigen + "|" + version + "|"
-                + requestId + "|" + lamportClock + "|" + payloadHash;
+                + requestId + "|" + lamportClock + "|" + timestamp + "|" + payloadHash;
     }
 
     public void firmar() { firma = SeguridadMensajes.firmarTexto(contenidoFirmable()); }
     public boolean firmaValida() { return SeguridadMensajes.validarTexto(contenidoFirmable(), firma); }
+    public boolean esFresco() { return SeguridadMensajes.esTimestampFresco(timestamp); }
     public String toJson() { return GSON.toJson(this); }
     public static MensajeReplicacion fromJson(String json) {
         return GSON.fromJson(json, MensajeReplicacion.class);

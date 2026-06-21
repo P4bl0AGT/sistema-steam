@@ -24,10 +24,10 @@ import java.util.logging.*;
  * CONCURRENCIA: un ExecutorService atiende múltiples clientes en paralelo.
  * El acceso a los datos (BDSesiones) está protegido con synchronized(lock).
  *
- * PERSISTENCIA: GestorPersistencia garantiza escritura atómica Main + Copy.
+ * PERSISTENCIA: Main se escribe atomicamente; Copy es un respaldo periodico.
  *
  * SEGURIDAD:
- *  - Contraseñas almacenadas con SHA-256.
+ *  - Contraseñas almacenadas con PBKDF2-HMAC-SHA256 (SHA-256 legado se migra al cambiarla).
  *  - Tokens generados con UUID (aleatorio criptográfico).
  *  - Ninguna operación privilegiada se ejecuta sin verificar el rol.
  */
@@ -41,8 +41,15 @@ public class svSesiones {
     private final GestorPersistencia<BDSesiones> gp;
     private final ReplicadorEstado<BDSesiones> replicador;
     private final CacheIdempotencia             idempotencia = new CacheIdempotencia();
-    private final ExecutorService              pool   = Executors.newFixedThreadPool(Constantes.POOL_SIZE);
+    private final ExecutorService              pool   = Ejecutores.acotado("sesiones-worker", Constantes.POOL_SIZE, false);
     private final Object                       lock   = new Object(); // monitor de acceso a BD
+    private final Map<String, IntentosLogin>    intentosLogin = new HashMap<>();
+
+    private static final class IntentosLogin {
+        int fallos;
+        long inicioVentana;
+        long bloqueadoHasta;
+    }
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -87,6 +94,7 @@ public class svSesiones {
     // ── Punto de entrada ──────────────────────────────────────────────────────
 
     public static void main(String[] args) {
+        Configuracion.validarArranque();
         int nodo   = args.length > 0 ? Integer.parseInt(args[0]) : 1;
         int puerto = (nodo == 2) ? Constantes.PUERTO_SES_2 : Constantes.PUERTO_SES_1;
         GestorLog.configurar("svSesiones-" + nodo);
@@ -112,7 +120,8 @@ public class svSesiones {
 
         // ── Desregistrar del Proxy al apagarse ───────────────────────────────
         Runtime.getRuntime().addShutdownHook(new Thread(
-            () -> { sv.replicador.stop(); RegistradorProxy.desregistrar("SESIONES", puerto); },
+            () -> { snap.stop(); sv.replicador.stop();
+                    RegistradorProxy.desregistrar("SESIONES", puerto); },
             "shutdown-sesiones-" + nodo
         ));
 
@@ -123,11 +132,13 @@ public class svSesiones {
         LOG.info("=== svSesiones iniciado en puerto " + puerto + " ===");
         try (ServerSocket server = Transporte.servidor(puerto)) {
             while (true) {
-                Socket cliente = server.accept();
+                Socket cliente = Transporte.aceptar(server);
                 pool.submit(() -> manejarCliente(cliente));
             }
         } catch (IOException e) {
             LOG.severe("Error en svSesiones:" + puerto + " → " + e.getMessage());
+        } finally {
+            pool.shutdownNow();
         }
     }
 
@@ -140,10 +151,21 @@ public class svSesiones {
              PrintWriter    out = new PrintWriter(
                      new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true)) {
 
-            String linea = LineaJson.leer(in, Configuracion.maxMessageBytes());
+            String linea;
+            try { linea = LineaJson.leer(in, Configuracion.maxMessageBytes()); }
+            catch (LineaJson.MensajeDemasiadoGrandeException e) {
+                out.println(MensajeProtocolo.error("?", "MESSAGE_TOO_LARGE", e.getMessage()).toJson());
+                return;
+            }
             if (linea == null) return;
 
-            MensajeProtocolo req = MensajeProtocolo.fromJson(linea);
+            MensajeProtocolo req;
+            try { req = MensajeProtocolo.fromJson(linea); }
+            catch (RuntimeException e) {
+                out.println(MensajeProtocolo.error("?", "JSON_MALFORMADO",
+                        "Mensaje JSON mal formado").toJson());
+                return;
+            }
             String error = SeguridadMensajes.validarSolicitud(req);
             if (error != null) {
                 out.println(MensajeProtocolo.error(req == null ? "?" : req.getRequestId(),
@@ -152,7 +174,7 @@ public class svSesiones {
             }
             relojLamport.update(req.getLamportClock());
 
-            MensajeProtocolo resp = idempotencia.ejecutar(req.getRequestId(), () -> procesar(req));
+            MensajeProtocolo resp = idempotencia.ejecutar(req, () -> procesar(req));
             resp.setLamportClock(relojLamport.tick());
             resp.setEmisor("SES-" + nodo);
             resp.setReceptor(req.getEmisor());
@@ -169,14 +191,18 @@ public class svSesiones {
 
     private MensajeProtocolo procesar(MensajeProtocolo req) {
         if (req == null) return MensajeProtocolo.error("?", "INVALID_REQUEST", "Mensaje inválido");
-        if (Utils.esOperacionEscritura(req.getOperacion())
-                && nodo != Configuracion.writerNodeId("SESIONES")
-                && replicador.isPeerAlcanzable()) {
-            return MensajeProtocolo.error(req.getRequestId(), "NOT_PRIMARY",
-                    "Nodo secundario de sesiones; escritor=" + Configuracion.writerNodeId("SESIONES"));
+        if (Utils.esOperacionEscritura(req.getOperacion())) {
+            if (nodo != Configuracion.writerNodeId("SESIONES")) {
+                return MensajeProtocolo.error(req.getRequestId(), "NOT_PRIMARY",
+                        "Nodo secundario de sesiones; escritor=" + Configuracion.writerNodeId("SESIONES"));
+            }
+            if (!replicador.isListoParaEscrituras()) {
+                return MensajeProtocolo.error(req.getRequestId(), "SERVICE_UNAVAILABLE",
+                        "Writer de sesiones reconciliando su estado");
+            }
         }
 
-        // HEALTH_CHECK se logea en FINE para no inundar el log (~6 entradas/min por nodo)
+        // HEALTH_CHECK se logea en FINE para no inundar el log.
         LOG.log(Constantes.HEALTH_CHECK.equals(req.getOperacion()) ? Level.FINE : Level.INFO,
                 "[SES] op=" + req.getOperacion() + " rId=" + req.getRequestId());
 
@@ -186,6 +212,7 @@ public class svSesiones {
             case Constantes.LOGIN             -> login(req);
             case Constantes.LOGOUT            -> logout(req);
             case Constantes.VALIDAR_TOKEN     -> validarToken(req);
+            case Constantes.VALIDAR_USUARIO_INTERNO -> validarUsuarioInterno(req);
             case Constantes.REGISTRAR_USUARIO -> registrarUsuario(req);
             case Constantes.LISTAR_USUARIOS   -> listarUsuarios(req);
             case Constantes.CAMBIAR_PASS      -> cambiarPassword(req);
@@ -199,6 +226,7 @@ public class svSesiones {
     private MensajeProtocolo healthCheck(MensajeProtocolo req) {
         MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "svSesiones OK");
         resp.put("puerto", puerto);
+        resp.put("writerReady", replicador.isListoParaEscrituras());
         return resp;
     }
 
@@ -215,30 +243,36 @@ public class svSesiones {
 
     /**
      * LOGIN: verifica usuario/contraseña y genera un token de sesión único.
-     * SEGURIDAD: contraseña comparada contra su hash SHA-256.
+     * SEGURIDAD: contraseña comparada contra su hash PBKDF2.
      */
     private MensajeProtocolo login(MensajeProtocolo req) {
         String username = req.getString("username");
         String password = req.getString("password");
 
-        if (username == null || password == null) {
+        if (!Utils.usernameValido(username) || !Utils.passwordValida(password)) {
             return MensajeProtocolo.error(req.getRequestId(),
-                    "BUSINESS_INVALID_REQUEST", "Faltan credenciales");
+                    "BUSINESS_INVALID_REQUEST", "Credenciales fuera de formato");
         }
 
         synchronized (lock) {
             BDSesiones bd = gp.leer();
             if (bd == null) return MensajeProtocolo.error(req.getRequestId(),
                     "SERVICE_UNAVAILABLE", "BD no disponible");
+            if (loginBloqueado(username)) {
+                return MensajeProtocolo.error(req.getRequestId(), "RATE_LIMITED",
+                        "Demasiados intentos de acceso; espere antes de reintentar");
+            }
 
             Usuario usuario = bd.usuarios.stream()
                     .filter(u -> u.username.equals(username) && u.activo)
                     .findFirst().orElse(null);
 
             if (usuario == null || !Utils.verificarPassword(password, usuario.passwordHash)) {
+                registrarFalloLogin(username);
                 return MensajeProtocolo.error(req.getRequestId(),
                         "AUTHENTICATION_FAILED", "Credenciales incorrectas");
             }
+            intentosLogin.remove(username);
 
             // Invalidar sesión anterior si existe
             bd.sesiones.stream()
@@ -247,7 +281,7 @@ public class svSesiones {
             long ahora = System.currentTimeMillis();
             long ttl = Configuracion.tokenTtlMs();
             bd.sesiones.removeIf(s -> !s.activa && ahora - s.creadoEn > ttl);
-            bd.sesiones.removeIf(s -> s.activa && ahora - s.ultimaActividad > ttl);
+            bd.sesiones.removeIf(s -> s.activa && ahora - s.creadoEn > ttl);
 
             // Crear nueva sesión
             String  token = UUID.randomUUID().toString();
@@ -282,7 +316,7 @@ public class svSesiones {
             if (bd == null) return MensajeProtocolo.error(req.getRequestId(), "BD no disponible");
 
             Optional<Sesion> sesion = bd.sesiones.stream()
-                    .filter(s -> s.token.equals(token) && s.vigente())
+                    .filter(s -> s.coincideToken(token) && s.vigente())
                     .findFirst();
 
             if (sesion.isEmpty()) {
@@ -313,7 +347,7 @@ public class svSesiones {
             if (bd == null) return MensajeProtocolo.error(req.getRequestId(), "BD no disponible");
 
             Optional<Sesion> sesion = bd.sesiones.stream()
-                    .filter(s -> s.token.equals(token) && s.vigente())
+                    .filter(s -> s.coincideToken(token) && s.vigente())
                     .findFirst();
 
             if (sesion.isEmpty()) {
@@ -321,13 +355,33 @@ public class svSesiones {
             }
 
             Sesion s = sesion.get();
-            // No persistimos ultimaActividad: evitar una escritura por cada validación
-            // reduce drásticamente la contención sobre el archivo compartido bajo carga.
-            // (La validación es una operación de lectura; no debe reescribir la BD.)
+            // El token usa vida absoluta: validar no renueva su vencimiento ni escribe la BD.
 
             MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "Token válido");
             resp.put("username", s.username);
             resp.put("rol",      s.rol);
+            return resp;
+        }
+    }
+
+    private MensajeProtocolo validarUsuarioInterno(MensajeProtocolo req) {
+        if (!SeguridadMensajes.validarControl(req)) {
+            return MensajeProtocolo.error(req.getRequestId(), "AUTHORIZATION_DENIED",
+                    "Firma de control requerida");
+        }
+        String username = req.getString("username");
+        if (!Utils.usernameValido(username)) {
+            return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_INVALID_REQUEST",
+                    "Username invalido");
+        }
+        synchronized (lock) {
+            BDSesiones bd = gp.leer();
+            if (bd == null) return MensajeProtocolo.error(req.getRequestId(),
+                    "SERVICE_UNAVAILABLE", "BD no disponible");
+            boolean existe = bd.usuarios.stream()
+                    .anyMatch(u -> u.activo && u.username.equals(username));
+            MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "Usuario validado");
+            resp.put("existe", existe);
             return resp;
         }
     }
@@ -351,6 +405,11 @@ public class svSesiones {
         if (nuevoUser == null || nuevaPass == null || nuevoRol == null) {
             return MensajeProtocolo.error(req.getRequestId(), "Faltan campos: nuevoUsername, nuevaPassword, nuevoRol");
         }
+        String usernameNormalizado = nuevoUser.trim();
+        if (!Utils.usernameValido(usernameNormalizado) || !Utils.passwordValida(nuevaPass)) {
+            return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_INVALID_REQUEST",
+                    "Username o password fuera de formato");
+        }
         if (!List.of(Constantes.ROL_COMPRADOR, Constantes.ROL_VENDEDOR, Constantes.ROL_ADMIN)
                 .contains(nuevoRol)) {
             return MensajeProtocolo.error(req.getRequestId(), "Rol inválido: " + nuevoRol);
@@ -360,18 +419,18 @@ public class svSesiones {
             BDSesiones bd = gp.leer();
             if (bd == null) return MensajeProtocolo.error(req.getRequestId(), "BD no disponible");
 
-            if (bd.usuarios.stream().anyMatch(u -> u.username.equals(nuevoUser))) {
+            if (bd.usuarios.stream().anyMatch(u -> u.username.equals(usernameNormalizado))) {
                 return MensajeProtocolo.error(req.getRequestId(), "El usuario ya existe");
             }
 
-            bd.usuarios.add(new Usuario(nuevoUser, Utils.hashPassword(nuevaPass), nuevoRol));
+            bd.usuarios.add(new Usuario(usernameNormalizado, Utils.hashPassword(nuevaPass), nuevoRol));
             try {
                 guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
                 return MensajeProtocolo.error(req.getRequestId(), "Error de persistencia");
             }
             return MensajeProtocolo.ok(req.getRequestId(),
-                    "Usuario '" + nuevoUser + "' creado con rol " + nuevoRol);
+                    "Usuario '" + usernameNormalizado + "' creado con rol " + nuevoRol);
         }
     }
 
@@ -416,6 +475,10 @@ public class svSesiones {
         if (passActual == null || passNueva == null) {
             return MensajeProtocolo.error(req.getRequestId(), "Faltan campos: passActual, passNueva");
         }
+        if (!Utils.passwordValida(passNueva)) {
+            return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_INVALID_REQUEST",
+                    "La password debe tener entre 6 y 128 caracteres");
+        }
 
         synchronized (lock) {
             BDSesiones bd = gp.leer();
@@ -439,8 +502,9 @@ public class svSesiones {
     }
 
     private ReplicadorEstado.Resultado guardarReplicado(BDSesiones bd, String requestId) throws IOException {
-        gp.guardar(bd);
-        ReplicadorEstado.Resultado resultado = replicador.registrarCambioLocal(bd, requestId);
+        ReplicadorEstado.Resultado resultado;
+        try { resultado = replicador.registrarCambioLocal(bd, requestId); }
+        catch (IllegalStateException e) { throw new IOException(e.getMessage(), e); }
         LOG.info("[REPL] requestId=" + requestId + " version=" + resultado.version()
                 + " confirmada=" + resultado.confirmada());
         return resultado;
@@ -454,5 +518,31 @@ public class svSesiones {
     private static boolean archivoVacio(String path) {
         File f = new File(path);
         return !f.exists() || f.length() == 0;
+    }
+
+    private boolean loginBloqueado(String username) {
+        IntentosLogin estado = intentosLogin.get(username);
+        if (estado == null) return false;
+        long ahora = System.currentTimeMillis();
+        if (estado.bloqueadoHasta > ahora) return true;
+        long ventana = Configuracion.getLong("steam.login.window.ms", 60_000L);
+        if (ahora - estado.inicioVentana > ventana) intentosLogin.remove(username);
+        return false;
+    }
+
+    private void registrarFalloLogin(String username) {
+        long ahora = System.currentTimeMillis();
+        long ventana = Configuracion.getLong("steam.login.window.ms", 60_000L);
+        int maximo = Configuracion.getInt("steam.login.max.failures", 5);
+        IntentosLogin estado = intentosLogin.computeIfAbsent(username, ignored -> new IntentosLogin());
+        if (estado.inicioVentana == 0L || ahora - estado.inicioVentana > ventana) {
+            estado.inicioVentana = ahora;
+            estado.fallos = 0;
+        }
+        estado.fallos++;
+        if (estado.fallos >= maximo) {
+            estado.bloqueadoHasta = ahora
+                    + Configuracion.getLong("steam.login.lockout.ms", 60_000L);
+        }
     }
 }

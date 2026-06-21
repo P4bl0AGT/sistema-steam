@@ -1,14 +1,13 @@
-param([int]$TimeoutSec = 35, [string]$Config = 'config/steam.properties')
+param([int]$TimeoutSec = 35, [string]$Config = 'config/steam.properties', [switch]$SinBuild)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'common.ps1')
 Set-Location $SteamRoot
 
 $occupied = @($SteamPorts | Where-Object { Test-SteamPort $_ 100 })
 if ($occupied.Count -gt 0) { throw "Puertos Steam ocupados: $($occupied -join ', ')" }
-if (-not (Test-Path 'target\classes\com\steam\proxy\Proxy.class')) {
-    & (Join-Path $PSScriptRoot '1_build.ps1')
-}
+if (-not $SinBuild) { & (Join-Path $PSScriptRoot '1_build.ps1') -SinPruebas }
 New-Item -ItemType Directory -Force $SteamRunDir | Out-Null
+Remove-Item -LiteralPath (Join-Path $SteamRunDir 'shutdown.marker') -Force -ErrorAction SilentlyContinue
 $Config | Set-Content (Join-Path $SteamRunDir 'config.txt') -Encoding ASCII
 
 $specs = @(
@@ -32,7 +31,10 @@ try {
     foreach ($port in $SteamPorts) {
         if (-not (Wait-SteamPort $port $TimeoutSec)) { throw "Timeout esperando puerto $port" }
     }
-    Start-Sleep -Seconds 3
+    $java = Get-SteamJava
+    & $java "-Dsteam.config=$Config" -cp "target\classes;target\test-classes;lib\gson-2.10.1.jar" `
+            com.steam.tests.PruebaPreparacion $TimeoutSec
+    if ($LASTEXITCODE -ne 0) { throw 'Los writers no completaron la reconciliacion inicial' }
     Write-Host "[OK] Sistema iniciado: 8 JVM, 2 proxies, 18 puertos." -ForegroundColor Green
     $started | Format-Table -AutoSize
 } catch {
