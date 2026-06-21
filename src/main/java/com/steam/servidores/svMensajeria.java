@@ -150,7 +150,8 @@ public class svMensajeria {
     private MensajeProtocolo procesar(MensajeProtocolo req) {
         if (req == null) return MensajeProtocolo.error("?", "INVALID_REQUEST", "Mensaje inválido");
         if (Utils.esOperacionEscritura(req.getOperacion())
-                && nodo != Configuracion.writerNodeId("MENSAJERIA")) {
+                && nodo != Configuracion.writerNodeId("MENSAJERIA")
+                && replicador.isPeerAlcanzable()) {
             return MensajeProtocolo.error(req.getRequestId(), "NOT_PRIMARY",
                     "Nodo secundario de mensajeria; escritor=" + Configuracion.writerNodeId("MENSAJERIA"));
         }
@@ -179,6 +180,10 @@ public class svMensajeria {
     }
 
     private MensajeProtocolo estadoReplicacion(MensajeProtocolo req) {
+        if (!SeguridadMensajes.validarControl(req)) {
+            return MensajeProtocolo.error(req.getRequestId(), "AUTHORIZATION_DENIED",
+                    "Firma de control requerida");
+        }
         MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "Replica de mensajeria");
         resp.put("nodo", nodo).put("version", replicador.getVersionActual())
                 .put("peer", replicador.getPeer().toString());
@@ -207,6 +212,10 @@ public class svMensajeria {
             return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_INVALID_REQUEST",
                     "Faltan campos: receptor, contenido");
         }
+        if (contenido.length() > 4096) {
+            return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_INVALID_REQUEST",
+                    "Mensaje demasiado largo (máximo 4096 caracteres)");
+        }
         if (receptor.equals(auth.username())) {
             return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_INVALID_REQUEST",
                     "No puedes enviarte mensajes a ti mismo");
@@ -224,8 +233,9 @@ public class svMensajeria {
             msg.nodoEmisor = nodo;
             bd.mensajes.add(msg);
 
+            ReplicadorEstado.Resultado repl;
             try {
-                guardarReplicado(bd, req.getRequestId());
+                repl = guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
                 return MensajeProtocolo.error(req.getRequestId(),
                         "PERSISTENCE_ERROR", "Error de persistencia");
@@ -235,6 +245,7 @@ public class svMensajeria {
                     "Mensaje enviado a " + receptor);
             resp.put("mensajeId", msg.id);
             resp.put("timestamp", msg.timestamp);
+            resp.put("replicaConfirmada", repl.confirmada());
             return resp;
         }
     }
@@ -265,6 +276,12 @@ public class svMensajeria {
             // Marcar como entregados (ACK)
             boolean cambios = !pendientes.isEmpty();
             pendientes.forEach(m -> { m.entregado = true; m.leido = true; });
+
+            long ahora = System.currentTimeMillis();
+            long retencionMs = 7L * 24 * 60 * 60 * 1000;
+            int antes = bd.mensajes.size();
+            bd.mensajes.removeIf(m -> m.entregado && m.leido && ahora - m.timestamp > retencionMs);
+            if (bd.mensajes.size() < antes) cambios = true;
 
             if (cambios) {
                 try {
@@ -337,14 +354,12 @@ public class svMensajeria {
             return resp;
         }
     }
-    private void guardarReplicado(BDMensajeria bd, String requestId) throws IOException {
-        if (nodo != Configuracion.writerNodeId("MENSAJERIA")) {
-            throw new IOException("Escritura rechazada en nodo secundario de mensajeria");
-        }
+    private ReplicadorEstado.Resultado guardarReplicado(BDMensajeria bd, String requestId) throws IOException {
         gp.guardar(bd);
         ReplicadorEstado.Resultado resultado = replicador.registrarCambioLocal(bd, requestId);
         LOG.info("[REPL] requestId=" + requestId + " version=" + resultado.version()
                 + " confirmada=" + resultado.confirmada());
+        return resultado;
     }
 
     private void guardarReplica(BDMensajeria estado) {

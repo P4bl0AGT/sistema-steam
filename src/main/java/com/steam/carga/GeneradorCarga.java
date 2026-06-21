@@ -8,6 +8,7 @@ import com.steam.common.Constantes;
 import com.steam.common.Endpoint;
 import com.steam.common.MensajeProtocolo;
 import com.steam.common.RelojLamport;
+import com.steam.common.SeguridadMensajes;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -48,6 +49,7 @@ public final class GeneradorCarga {
     private final LongAdder indisponibilidad = new LongAdder();
     private final LongAdder respuestas = new LongAdder();
     private final LongAdder perdidasTransporte = new LongAdder();
+    private final LongAdder loginsFallidos = new LongAdder();
     private final Map<String, LongAdder> porOperacion = new ConcurrentHashMap<>();
     private final Map<String, LongAdder> porCodigoError = new ConcurrentHashMap<>();
     private final Map<Integer, AcumuladorCoordinacion> coordinacionPorNodo = new ConcurrentHashMap<>();
@@ -108,25 +110,46 @@ public final class GeneradorCarga {
         try { inicio.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return; }
         long fin = inicioNanos + TimeUnit.SECONDS.toNanos(duracionSeg);
         while (System.nanoTime() < fin && !Thread.currentThread().isInterrupted()) {
+            if (token == null) {
+                token = login(numero, reloj);
+                if (token == null) {
+                    loginsFallidos.increment();
+                    intentos.increment();
+                    indisponibilidad.increment();
+                    porOperacion.computeIfAbsent(Constantes.LOGIN, k -> new LongAdder()).increment();
+                    try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
+                    continue;
+                }
+            }
             int opcion = ThreadLocalRandom.current().nextInt(100);
-            MensajeProtocolo req;
-            if (opcion < 50 || token == null) {
-                req = MensajeProtocolo.request(Constantes.LISTAR_JUEGOS, token);
+            if (opcion < 50) {
+                medir(MensajeProtocolo.request(Constantes.LISTAR_JUEGOS, token), reloj, "carga-" + numero);
             } else if (opcion < 70) {
-                req = MensajeProtocolo.request(Constantes.VER_SALDO, token);
+                medir(MensajeProtocolo.request(Constantes.VER_SALDO, token), reloj, "carga-" + numero);
             } else if (opcion < 82) {
-                req = MensajeProtocolo.request(Constantes.VER_MENSAJES, token);
+                medir(MensajeProtocolo.request(Constantes.VER_MENSAJES, token), reloj, "carga-" + numero);
             } else if (opcion < 95) {
                 int receptor = numero == hilos ? 1 : numero + 1;
-                req = MensajeProtocolo.request(Constantes.ENVIAR_MENSAJE, token)
+                medir(MensajeProtocolo.request(Constantes.ENVIAR_MENSAJE, token)
                         .put("receptor", "cliente" + receptor)
-                        .put("contenido", "carga-" + numero + "-" + System.nanoTime());
+                        .put("contenido", "carga-" + numero + "-" + System.nanoTime()), reloj, "carga-" + numero);
             } else {
                 String juego = juegos.stream().filter(comprasIntentadas::add).findFirst().orElse(null);
-                req = juego == null ? MensajeProtocolo.request(Constantes.LISTAR_JUEGOS, token)
-                        : MensajeProtocolo.request(Constantes.COMPRAR_JUEGO, token).put("juegoId", juego);
+                if (juego == null) {
+                    medir(MensajeProtocolo.request(Constantes.LISTAR_JUEGOS, token), reloj, "carga-" + numero);
+                } else {
+                    MensajeProtocolo resp = medir(
+                            MensajeProtocolo.request(Constantes.COMPRAR_JUEGO, token).put("juegoId", juego),
+                            reloj, "carga-" + numero);
+                    if (resp != null && resp.isOk()) {
+                        String reservaId = resp.getString("reservaId");
+                        if (reservaId != null) {
+                            medir(MensajeProtocolo.request(Constantes.CONFIRMAR_PAGO, token)
+                                    .put("reservaId", reservaId), reloj, "carga-" + numero);
+                        }
+                    }
+                }
             }
-            medir(req, reloj, "carga-" + numero);
         }
     }
 
@@ -152,12 +175,13 @@ public final class GeneradorCarga {
         return List.copyOf(ids);
     }
 
-    private void medir(MensajeProtocolo req, RelojLamport reloj, String emisor) {
+    private MensajeProtocolo medir(MensajeProtocolo req, RelojLamport reloj, String emisor) {
         intentos.increment();
         porOperacion.computeIfAbsent(req.getOperacion(), ignored -> new LongAdder()).increment();
         long inicio = System.nanoTime();
+        MensajeProtocolo resp = null;
         try {
-            MensajeProtocolo resp = ClienteProxy.enviar(req, reloj, emisor);
+            resp = ClienteProxy.enviar(req, reloj, emisor);
             respuestas.increment();
             registrarCompletada();
             if (resp.isOk()) {
@@ -171,6 +195,7 @@ public final class GeneradorCarga {
             long micros = TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - inicio);
             latenciasMicros.add(micros);
         }
+        return resp;
     }
 
     private void registrarCompletada() {
@@ -186,6 +211,9 @@ public final class GeneradorCarga {
         if (normalizado.startsWith("BUSINESS_")) erroresNegocio.increment();
         else if (normalizado.contains("UNAVAILABLE") || "NOT_PRIMARY".equals(normalizado)) {
             indisponibilidad.increment();
+        } else if ("AUTHENTICATION_FAILED".equals(normalizado)
+                || "AUTHORIZATION_DENIED".equals(normalizado)) {
+            erroresNegocio.increment();
         } else erroresSistema.increment();
     }
 
@@ -209,6 +237,7 @@ public final class GeneradorCarga {
         reporte.put("indisponibilidad", indisponibilidad.sum());
         reporte.put("respuestas", respuestas.sum());
         reporte.put("perdidasTransporte", perdidasTransporte.sum());
+        reporte.put("loginsFallidos", loginsFallidos.sum());
         reporte.put("tasaPerdidaPct", perdidaPct);
         reporte.put("throughputExitosSeg", exitos.sum() / (double) duracionSeg);
         reporte.put("throughputCompletadasSeg", respuestas.sum() / (double) duracionSeg);
@@ -263,6 +292,7 @@ public final class GeneradorCarga {
             try {
                 MensajeProtocolo req = MensajeProtocolo.request(Constantes.VER_METRICAS_COORD, null);
                 req.setLamportClock(relojMetricas.tick());
+                SeguridadMensajes.firmarControl(req);
                 MensajeProtocolo resp = ClienteProxy.enviarA(req, endpoint);
                 relojMetricas.update(resp.getLamportClock());
                 if (resp.isOk()) {

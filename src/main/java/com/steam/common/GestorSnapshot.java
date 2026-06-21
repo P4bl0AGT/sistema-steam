@@ -2,6 +2,7 @@ package com.steam.common;
 
 import java.io.IOException;
 import java.nio.file.*;
+import java.nio.file.StandardOpenOption;
 import java.util.concurrent.*;
 import java.util.logging.Logger;
 
@@ -92,9 +93,10 @@ public class GestorSnapshot {
             Path parent = copy.getParent();
             if (parent != null) Files.createDirectories(parent);
 
-            Files.copy(main, tmp,
-                    StandardCopyOption.REPLACE_EXISTING,
-                    StandardCopyOption.COPY_ATTRIBUTES);
+            byte[] contenido = Files.readAllBytes(main);
+            if (contenido.length == 0) return;
+            Files.write(tmp, contenido,
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 
             try {
                 Files.move(tmp, copy,
@@ -106,7 +108,7 @@ public class GestorSnapshot {
 
             LOG.info("[SNAPSHOT] " + componente
                     + " Copy actualizado desde Main ("
-                    + Files.size(copy) + " bytes)");
+                    + contenido.length + " bytes)");
 
         } catch (IOException e) {
             LOG.warning("[SNAPSHOT] " + componente

@@ -56,8 +56,9 @@ public class WatchdogServidor {
         new ServidorInfo("MSG-2", Constantes.PUERTO_MSG_2, "com.steam.servidores.svMensajeria", "2")
     );
 
-    // Fallos consecutivos por nombre de nodo
     private final Map<String, Integer> fallosConsecutivos = new ConcurrentHashMap<>();
+    private final Map<String, Long> ultimoReinicio = new ConcurrentHashMap<>();
+    private static final long GRACIA_REINICIO_MS = 60_000L;
 
     // ── Punto de entrada ──────────────────────────────────────────────────────
 
@@ -103,6 +104,12 @@ public class WatchdogServidor {
             return;
         }
 
+        Long ultimo = ultimoReinicio.get(sv.nombre());
+        if (ultimo != null && System.currentTimeMillis() - ultimo < GRACIA_REINICIO_MS) {
+            LOG.fine("[WATCHDOG] " + sv.nombre() + " en periodo de gracia tras reinicio.");
+            return;
+        }
+
         int fallos = fallosConsecutivos.merge(sv.nombre(), 1, Integer::sum);
         LOG.warning("[WATCHDOG] " + sv.nombre() + " (puerto=" + sv.puerto()
                 + ") no responde. Fallos consecutivos: " + fallos + "/" + Constantes.WATCHDOG_MAX_FALLOS);
@@ -111,6 +118,7 @@ public class WatchdogServidor {
             LOG.warning("[WATCHDOG] Umbral alcanzado. Reiniciando " + sv.nombre() + "...");
             reiniciar(sv);
             fallosConsecutivos.put(sv.nombre(), 0);
+            ultimoReinicio.put(sv.nombre(), System.currentTimeMillis());
         }
     }
 

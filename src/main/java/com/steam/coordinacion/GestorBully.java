@@ -190,73 +190,69 @@ public class GestorBully {
      * 5. Si no llega COORDINATOR → reinicio la elección.
      */
     public void iniciarEleccion() {
-        // Evitar elecciones simultáneas
         if (!eleccionEnCurso.compareAndSet(false, true)) return;
 
-        LOG.info("[BULLY] t=" + reloj.tick() + " Iniciando elección. id=" + miId);
-
-        List<NodoInfo> mayores = peers.stream()
-                .filter(p -> p.id > miId)
-                .toList();
-
-        if (mayores.isEmpty()) {
-            // Soy el nodo de mayor id → coordinador sin negociación
-            convertirseEnCoordinador();
-            eleccionEnCurso.set(false);
-            return;
-        }
-
-        // Pre-inicializar latches ANTES de enviar (evita NPE si llega respuesta rápida)
-        okLatch    = new CountDownLatch(1);
-        coordLatch = new CountDownLatch(1);
-
-        // Enviar ELECTION en paralelo a todos los mayores
-        CountDownLatch fin = new CountDownLatch(mayores.size());
-        AtomicBoolean  okRecibido = new AtomicBoolean(false);
-
-        for (NodoInfo peer : mayores) {
-            pool.submit(() -> {
-                try {
-                    if (enviarEleccionYEsperarOk(peer)) {
-                        okRecibido.set(true);
-                        okLatch.countDown(); // despierta al waiter
-                    }
-                } finally {
-                    fin.countDown();
-                }
-            });
-        }
-
-        // Esperar hasta que alguno responda OK o todos fallen
         try {
-            okLatch.await(Constantes.TIMEOUT_BULLY_OK_MS, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            eleccionEnCurso.set(false);
-            return;
-        }
+            for (int intento = 0; intento < 5; intento++) {
+                LOG.info("[BULLY] t=" + reloj.tick() + " Iniciando elección. id=" + miId
+                        + " intento=" + (intento + 1));
 
-        if (!okRecibido.get()) {
-            // Nadie respondió OK → soy el coordinador
-            convertirseEnCoordinador();
-        } else {
-            // Alguno respondió OK → espero que él anuncie COORDINATOR
-            try {
-                boolean llego = coordLatch.await(Constantes.TIMEOUT_BULLY_COORD_MS,
-                        TimeUnit.MILLISECONDS);
-                if (!llego) {
-                    LOG.warning("[BULLY] COORDINATOR no llegó en "
-                            + Constantes.TIMEOUT_BULLY_COORD_MS + "ms. Reintentando.");
-                    eleccionEnCurso.set(false);
-                    iniciarEleccion(); // reintentar
+                List<NodoInfo> mayores = peers.stream()
+                        .filter(p -> p.id > miId)
+                        .toList();
+
+                if (mayores.isEmpty()) {
+                    convertirseEnCoordinador();
                     return;
                 }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
 
-        eleccionEnCurso.set(false);
+                okLatch    = new CountDownLatch(1);
+                coordLatch = new CountDownLatch(1);
+
+                CountDownLatch fin = new CountDownLatch(mayores.size());
+                AtomicBoolean  okRecibido = new AtomicBoolean(false);
+
+                for (NodoInfo peer : mayores) {
+                    pool.submit(() -> {
+                        try {
+                            if (enviarEleccionYEsperarOk(peer)) {
+                                okRecibido.set(true);
+                                okLatch.countDown();
+                            }
+                        } finally {
+                            fin.countDown();
+                        }
+                    });
+                }
+
+                try {
+                    okLatch.await(Constantes.TIMEOUT_BULLY_OK_MS, TimeUnit.MILLISECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+
+                if (!okRecibido.get()) {
+                    convertirseEnCoordinador();
+                    return;
+                }
+
+                try {
+                    boolean llego = coordLatch.await(Constantes.TIMEOUT_BULLY_COORD_MS,
+                            TimeUnit.MILLISECONDS);
+                    if (llego) return;
+                    LOG.warning("[BULLY] COORDINATOR no llegó en "
+                            + Constantes.TIMEOUT_BULLY_COORD_MS + "ms. Reintentando.");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+            LOG.severe("[BULLY] Elección fallida tras 5 intentos. Me proclamo coordinador.");
+            convertirseEnCoordinador();
+        } finally {
+            eleccionEnCurso.set(false);
+        }
     }
 
     /** Envía ELECTION y espera OK en la misma conexión TCP. */

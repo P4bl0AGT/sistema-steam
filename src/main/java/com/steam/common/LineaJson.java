@@ -11,13 +11,15 @@ public final class LineaJson {
         return leer(reader, Configuracion.maxMessageBytes());
     }
 
-    public static String leer(BufferedReader reader, int max) throws IOException {
-        StringBuilder sb = new StringBuilder(Math.min(max, 4096));
+    public static String leer(BufferedReader reader, int maxBytes) throws IOException {
+        StringBuilder sb = new StringBuilder(Math.min(maxBytes, 4096));
+        int bytesEstimados = 0;
         int c;
         while ((c = reader.read()) != -1) {
             if (c == '\n') break;
             if (c != '\r') {
-                if (sb.length() >= max) throw new MensajeDemasiadoGrandeException(max);
+                bytesEstimados += (c <= 0x7F) ? 1 : (c <= 0x7FF) ? 2 : 3;
+                if (bytesEstimados > maxBytes) throw new MensajeDemasiadoGrandeException(maxBytes);
                 sb.append((char) c);
             }
         }
@@ -26,6 +28,6 @@ public final class LineaJson {
     }
 
     public static final class MensajeDemasiadoGrandeException extends IOException {
-        public MensajeDemasiadoGrandeException(int max) { super("Mensaje excede " + max + " bytes/caracteres"); }
+        public MensajeDemasiadoGrandeException(int max) { super("Mensaje excede " + max + " bytes"); }
     }
 }

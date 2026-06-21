@@ -170,7 +170,8 @@ public class svSesiones {
     private MensajeProtocolo procesar(MensajeProtocolo req) {
         if (req == null) return MensajeProtocolo.error("?", "INVALID_REQUEST", "Mensaje inválido");
         if (Utils.esOperacionEscritura(req.getOperacion())
-                && nodo != Configuracion.writerNodeId("SESIONES")) {
+                && nodo != Configuracion.writerNodeId("SESIONES")
+                && replicador.isPeerAlcanzable()) {
             return MensajeProtocolo.error(req.getRequestId(), "NOT_PRIMARY",
                     "Nodo secundario de sesiones; escritor=" + Configuracion.writerNodeId("SESIONES"));
         }
@@ -202,6 +203,10 @@ public class svSesiones {
     }
 
     private MensajeProtocolo estadoReplicacion(MensajeProtocolo req) {
+        if (!SeguridadMensajes.validarControl(req)) {
+            return MensajeProtocolo.error(req.getRequestId(), "AUTHORIZATION_DENIED",
+                    "Firma de control requerida");
+        }
         MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "Replica de sesiones");
         resp.put("nodo", nodo).put("version", replicador.getVersionActual())
                 .put("peer", replicador.getPeer().toString());
@@ -239,16 +244,19 @@ public class svSesiones {
             bd.sesiones.stream()
                     .filter(s -> s.username.equals(username) && s.activa)
                     .forEach(s -> s.activa = false);
-            bd.sesiones.removeIf(s -> !s.activa
-                    && System.currentTimeMillis() - s.creadoEn > Configuracion.tokenTtlMs());
+            long ahora = System.currentTimeMillis();
+            long ttl = Configuracion.tokenTtlMs();
+            bd.sesiones.removeIf(s -> !s.activa && ahora - s.creadoEn > ttl);
+            bd.sesiones.removeIf(s -> s.activa && ahora - s.ultimaActividad > ttl);
 
             // Crear nueva sesión
             String  token = UUID.randomUUID().toString();
             Sesion  sesion = new Sesion(token, username, usuario.rol);
             bd.sesiones.add(sesion);
 
+            ReplicadorEstado.Resultado repl;
             try {
-                guardarReplicado(bd, req.getRequestId());
+                repl = guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
                 return MensajeProtocolo.error(req.getRequestId(),
                         "PERSISTENCE_ERROR", "Error de persistencia");
@@ -259,6 +267,7 @@ public class svSesiones {
             resp.put("token",    token);
             resp.put("rol",      usuario.rol);
             resp.put("username", username);
+            resp.put("replicaConfirmada", repl.confirmada());
             return resp;
         }
     }
@@ -429,15 +438,12 @@ public class svSesiones {
         }
     }
 
-    /** Retorna true si el archivo no existe o tiene tamaño 0. */
-    private void guardarReplicado(BDSesiones bd, String requestId) throws IOException {
-        if (nodo != Configuracion.writerNodeId("SESIONES")) {
-            throw new IOException("Escritura rechazada en nodo secundario de sesiones");
-        }
+    private ReplicadorEstado.Resultado guardarReplicado(BDSesiones bd, String requestId) throws IOException {
         gp.guardar(bd);
         ReplicadorEstado.Resultado resultado = replicador.registrarCambioLocal(bd, requestId);
         LOG.info("[REPL] requestId=" + requestId + " version=" + resultado.version()
                 + " confirmada=" + resultado.confirmada());
+        return resultado;
     }
 
     private void guardarReplica(BDSesiones estado) {

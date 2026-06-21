@@ -20,11 +20,16 @@ public final class Transporte {
         SocketFactory factory = Configuracion.tlsEnabled()
                 ? SSLSocketFactory.getDefault() : SocketFactory.getDefault();
         Socket socket = factory.createSocket();
-        socket.connect(new InetSocketAddress(host, puerto), Configuracion.connectTimeoutMs());
-        socket.setSoTimeout(Configuracion.readTimeoutMs());
-        if (socket instanceof SSLSocket ssl) {
-            ssl.setEnabledProtocols(new String[]{"TLSv1.3", "TLSv1.2"});
-            ssl.startHandshake();
+        try {
+            socket.connect(new InetSocketAddress(host, puerto), Configuracion.connectTimeoutMs());
+            socket.setSoTimeout(Configuracion.readTimeoutMs());
+            if (socket instanceof SSLSocket ssl) {
+                ssl.setEnabledProtocols(new String[]{"TLSv1.3", "TLSv1.2"});
+                ssl.startHandshake();
+            }
+        } catch (IOException e) {
+            socket.close();
+            throw e;
         }
         return socket;
     }
@@ -34,11 +39,16 @@ public final class Transporte {
         ServerSocketFactory factory = Configuracion.tlsEnabled()
                 ? SSLServerSocketFactory.getDefault() : ServerSocketFactory.getDefault();
         ServerSocket server = factory.createServerSocket();
-        server.setReuseAddress(true);
-        server.bind(new InetSocketAddress(Configuracion.bindHost(), puerto));
-        if (server instanceof SSLServerSocket ssl) {
-            ssl.setEnabledProtocols(new String[]{"TLSv1.3", "TLSv1.2"});
-            ssl.setNeedClientAuth(Configuracion.tlsClientAuth());
+        try {
+            server.setReuseAddress(true);
+            server.bind(new InetSocketAddress(Configuracion.bindHost(), puerto));
+            if (server instanceof SSLServerSocket ssl) {
+                ssl.setEnabledProtocols(new String[]{"TLSv1.3", "TLSv1.2"});
+                ssl.setNeedClientAuth(Configuracion.tlsClientAuth());
+            }
+        } catch (IOException e) {
+            server.close();
+            throw e;
         }
         return server;
     }

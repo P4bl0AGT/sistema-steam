@@ -226,11 +226,18 @@ public class Proxy {
                 "Operacion desconocida: " + req.getOperacion());
         AtomicInteger rr = contador(cluster);
         boolean escritura = Utils.esOperacionEscritura(req.getOperacion());
-        int inicio = escritura ? indiceEscritor(nodos, cluster)
-                : Math.floorMod(rr.getAndIncrement(), nodos.size());
-        if (inicio < 0 || (escritura && !nodos.get(inicio).activo.get())) {
-            return error(req.getRequestId(), "SERVICE_UNAVAILABLE",
-                    "Escritor configurado de " + cluster + " no disponible");
+        int inicio;
+        boolean failoverEscritura = false;
+        if (escritura) {
+            inicio = indiceEscritor(nodos, cluster);
+            if (inicio < 0 || !nodos.get(inicio).activo.get()) {
+                inicio = Math.floorMod(rr.getAndIncrement(), nodos.size());
+                failoverEscritura = true;
+                LOG.warning("[PROXY] Escritor de " + cluster
+                        + " no disponible; failover a nodo activo");
+            }
+        } else {
+            inicio = Math.floorMod(rr.getAndIncrement(), nodos.size());
         }
         boolean algunoActivo = false;
         for (int i = 0; i < nodos.size(); i++) {
@@ -249,7 +256,7 @@ public class Proxy {
                 membresia.marcarCaido(nodo.id);
                 LOG.warning("[PROXY] " + nodo.nombre + " fallo en " + req.getOperacion()
                         + ": " + e.getMessage());
-                if (escritura) break;
+                if (escritura && !failoverEscritura) break;
             }
         }
         return error(req.getRequestId(), "SERVICE_UNAVAILABLE",
@@ -309,7 +316,7 @@ public class Proxy {
         if (anterior != ok) LOG.info("[HEALTH] " + nodo.nombre + (ok ? " ACTIVO" : " CAIDO"));
     }
 
-    private Nodo agregarSiAusente(Nodo candidato) {
+    private synchronized Nodo agregarSiAusente(Nodo candidato) {
         List<Nodo> lista = obtenerCluster(candidato.cluster);
         Nodo existente = lista.stream().filter(n -> n.id.equals(candidato.id)).findFirst().orElse(null);
         if (existente != null) return existente;

@@ -63,9 +63,27 @@ public class MensajeProtocolo {
         return m;
     }
 
-    /** Crea un RESPONSE de error. */
+    /** Crea un RESPONSE de error con código inferido del mensaje. */
     public static MensajeProtocolo error(String requestId, String mensaje) {
-        return error(requestId, "UNCLASSIFIED_ERROR", mensaje);
+        return error(requestId, inferirCodigo(mensaje), mensaje);
+    }
+
+    private static String inferirCodigo(String m) {
+        if (m == null) return "UNCLASSIFIED_ERROR";
+        if (m.contains("BD no disponible")) return "SERVICE_UNAVAILABLE";
+        if (m.contains("Token") || m.contains("Credenciales") || m.contains("Contraseña"))
+            return "AUTHENTICATION_FAILED";
+        if (m.contains("Acceso denegado") || m.contains("se requiere rol"))
+            return "AUTHORIZATION_DENIED";
+        if (m.contains("persistencia")) return "PERSISTENCE_ERROR";
+        if (m.contains("Falta") || m.contains("requerido") || m.contains("Campos requeridos"))
+            return "BUSINESS_INVALID_REQUEST";
+        if (m.contains("ya existe") || m.contains("Ya tienes") || m.contains("Ya posees"))
+            return "BUSINESS_CONFLICT";
+        if (m.contains("no encontrad") || m.contains("no soportada"))
+            return "BUSINESS_NOT_FOUND";
+        if (m.contains("Sin stock")) return "BUSINESS_NO_STOCK";
+        return "UNCLASSIFIED_ERROR";
     }
 
     /** Crea un RESPONSE de error con una categoría estable para métricas. */
@@ -116,14 +134,20 @@ public class MensajeProtocolo {
     public double getDouble(String key) {
         Object v = get(key);
         if (v instanceof Number n) return n.doubleValue();
-        if (v instanceof String s)  return Double.parseDouble(s);
+        if (v instanceof String s) {
+            try { return Double.parseDouble(s); }
+            catch (NumberFormatException e) { return 0.0; }
+        }
         return 0.0;
     }
 
     public int getInt(String key) {
         Object v = get(key);
         if (v instanceof Number n) return n.intValue();
-        if (v instanceof String s)  return Integer.parseInt(s);
+        if (v instanceof String s) {
+            try { return Integer.parseInt(s); }
+            catch (NumberFormatException e) { return 0; }
+        }
         return 0;
     }
 

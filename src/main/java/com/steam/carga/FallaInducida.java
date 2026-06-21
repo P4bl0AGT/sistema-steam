@@ -66,19 +66,24 @@ public final class FallaInducida {
     }
 
     private static int encontrarCoordinador() {
+        int candidato = -1;
         for (int nodo = 1; nodo <= 2; nodo++) {
             int port = nodo == 1 ? Constantes.PUERTO_JUE_1 : Constantes.PUERTO_JUE_2;
             MensajeProtocolo resp = enviar(
                     MensajeProtocolo.request(Constantes.QUIEN_ES_COORDINADOR, null), port);
-            if (resp != null && resp.isOk() && Boolean.TRUE.equals(resp.get("soyCoordinador"))) return nodo;
+            if (resp == null || !resp.isOk()) continue;
+            if (Boolean.TRUE.equals(resp.get("soyCoordinador"))) return nodo;
+            Object coord = resp.get("coordinadorActual");
+            if (coord instanceof Number n && n.intValue() > 0) candidato = n.intValue();
         }
-        return -1;
+        return candidato;
     }
 
     private static MensajeProtocolo enviar(MensajeProtocolo req, int puerto) {
         try {
             if (req.getEmisor() == null) req.setEmisor("FallaInducida");
             if (req.getLamportClock() == 0L) req.setLamportClock(1L);
+            SeguridadMensajes.firmarControl(req);
             return ClienteProxy.enviarA(req, new Endpoint("localhost", puerto));
         } catch (Exception e) { return null; }
     }

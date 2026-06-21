@@ -219,7 +219,8 @@ public class svJuegos {
     private MensajeProtocolo procesar(MensajeProtocolo req) {
         if (req == null) return MensajeProtocolo.error("?", "INVALID_REQUEST", "Mensaje inválido");
         if (Utils.esOperacionEscritura(req.getOperacion())
-                && miId != Configuracion.writerNodeId("JUEGOS")) {
+                && miId != Configuracion.writerNodeId("JUEGOS")
+                && replicador.isPeerAlcanzable()) {
             return MensajeProtocolo.error(req.getRequestId(), "NOT_PRIMARY",
                     "Nodo secundario de juegos; escritor=" + Configuracion.writerNodeId("JUEGOS"));
         }
@@ -271,6 +272,10 @@ public class svJuegos {
     }
 
     private MensajeProtocolo estadoReplicacion(MensajeProtocolo req) {
+        if (!SeguridadMensajes.validarControl(req)) {
+            return MensajeProtocolo.error(req.getRequestId(), "AUTHORIZATION_DENIED",
+                    "Firma de control requerida");
+        }
         MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "Replica de juegos");
         resp.put("nodo", miId).put("version", replicador.getVersionActual())
                 .put("peer", replicador.getPeer().toString());
@@ -278,6 +283,10 @@ public class svJuegos {
     }
 
     private MensajeProtocolo quienEsCoordinador(MensajeProtocolo req) {
+        if (!SeguridadMensajes.validarControl(req)) {
+            return MensajeProtocolo.error(req.getRequestId(), "AUTHORIZATION_DENIED",
+                    "Firma de control requerida");
+        }
         int coord = (bully != null) ? bully.getCoordinadorActual() : -1;
         MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(), "Coordinador actual");
         resp.put("coordinadorActual", coord);
@@ -292,6 +301,10 @@ public class svJuegos {
      * y suma los totales para el reporte de carga (rúbrica 3.2).
      */
     private MensajeProtocolo verMetricasCoord(MensajeProtocolo req) {
+        if (!SeguridadMensajes.validarControl(req)) {
+            return MensajeProtocolo.error(req.getRequestId(), "AUTHORIZATION_DENIED",
+                    "Firma de control requerida");
+        }
         long bullyMsg = (bully != null) ? bully.getMensajesCoordinacion() : 0;
         long mutexMsg = (mutex != null) ? mutex.getMensajesCoordinacion() : 0;
         MensajeProtocolo resp = MensajeProtocolo.ok(req.getRequestId(),
@@ -430,10 +443,10 @@ public class svJuegos {
                     auth.username(), juego.precio, Constantes.TTL_RESERVA_MS);
             bd.reservas.add(reserva);
 
+            ReplicadorEstado.Resultado repl;
             try {
-                guardarReplicado(bd, req.getRequestId());
+                repl = guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
-                // Rollback en memoria (no llegó a guardarse)
                 juego.stock++;
                 return MensajeProtocolo.error(req.getRequestId(),
                         "PERSISTENCE_ERROR", "Error de persistencia");
@@ -446,6 +459,7 @@ public class svJuegos {
             resp.put("precio",          juego.precio);
             resp.put("expiraEn",        reserva.expiraEn);
             resp.put("segundosRestantes", reserva.segundosRestantes());
+            resp.put("replicaConfirmada", repl.confirmada());
             return resp;
         } } finally {
             // Liberar mutex distribuido siempre, incluso si hubo excepción
@@ -500,7 +514,13 @@ public class svJuegos {
                 // Restaurar stock (el daemon puede no haber corrido aún)
                 bd.catalogo.stream().filter(j -> j.id.equals(reserva.juegoId))
                         .findFirst().ifPresent(j -> j.stock++);
-                try { guardarReplicado(bd, req.getRequestId()); } catch (IOException ignored) {}
+                try {
+                    guardarReplicado(bd, req.getRequestId());
+                } catch (IOException e) {
+                    LOG.severe("[JUEGOS] No se pudo persistir liberacion de stock: " + e.getMessage());
+                    return MensajeProtocolo.error(req.getRequestId(), "PERSISTENCE_ERROR",
+                            "Reserva expirada pero no se pudo persistir la liberacion del stock");
+                }
                 return MensajeProtocolo.error(req.getRequestId(), "BUSINESS_RESERVATION_EXPIRED",
                         "Tiempo agotado. La reserva expiró y el stock fue liberado.");
             }
@@ -537,8 +557,9 @@ public class svJuegos {
             // Cerrar reserva (liberar lock)
             reserva.activa = false;
 
+            ReplicadorEstado.Resultado repl;
             try {
-                guardarReplicado(bd, req.getRequestId());
+                repl = guardarReplicado(bd, req.getRequestId());
             } catch (IOException e) {
                 return MensajeProtocolo.error(req.getRequestId(),
                         "PERSISTENCE_ERROR", "Error de persistencia");
@@ -548,6 +569,7 @@ public class svJuegos {
             resp.put("juegoNombre",  reserva.juegoNombre);
             resp.put("precio",       reserva.precio);
             resp.put("saldoRestante", bd.billeteras.get(auth.username()));
+            resp.put("replicaConfirmada", repl.confirmada());
             return resp;
         } } finally {
             mutex.releaseLock(lockStock, miId);
@@ -558,7 +580,7 @@ public class svJuegos {
     private MensajeProtocolo cancelarReserva(MensajeProtocolo req) {
         ValidadorToken.ResultadoValidacion auth = autenticar(req);
         if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(),
-                "AUTHENTICATION_FAILED", auth.mensaje());
+                "AUTHENTICATION_FAILED", "Token inválido: " + auth.mensaje());
 
         String reservaId = req.getString("reservaId");
         if (reservaId == null) return MensajeProtocolo.error(req.getRequestId(),
@@ -612,9 +634,10 @@ public class svJuegos {
      */
     private MensajeProtocolo publicarJuego(MensajeProtocolo req) {
         ValidadorToken.ResultadoValidacion auth = autenticar(req);
-        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(), auth.mensaje());
+        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(),
+                "AUTHENTICATION_FAILED", "Token inválido: " + auth.mensaje());
         if (!List.of(Constantes.ROL_VENDEDOR, Constantes.ROL_ADMIN).contains(auth.rol())) {
-            return MensajeProtocolo.error(req.getRequestId(),
+            return MensajeProtocolo.error(req.getRequestId(), "AUTHORIZATION_DENIED",
                     "Acceso denegado: se requiere rol VENDEDOR o ADMINISTRADOR");
         }
 
@@ -653,7 +676,8 @@ public class svJuegos {
     /** MODIFICAR_JUEGO: el vendedor dueño o ADMINISTRADOR pueden modificarlo. */
     private MensajeProtocolo modificarJuego(MensajeProtocolo req) {
         ValidadorToken.ResultadoValidacion auth = autenticar(req);
-        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(), auth.mensaje());
+        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(),
+                "AUTHENTICATION_FAILED", "Token inválido: " + auth.mensaje());
 
         String juegoId = req.getString("juegoId");
         if (juegoId == null) return MensajeProtocolo.error(req.getRequestId(), "Falta juegoId");
@@ -687,7 +711,8 @@ public class svJuegos {
     /** ELIMINAR_JUEGO: solo el dueño o ADMINISTRADOR. */
     private MensajeProtocolo eliminarJuego(MensajeProtocolo req) {
         ValidadorToken.ResultadoValidacion auth = autenticar(req);
-        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(), auth.mensaje());
+        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(),
+                "AUTHENTICATION_FAILED", "Token inválido: " + auth.mensaje());
 
         String juegoId = req.getString("juegoId");
         if (juegoId == null) return MensajeProtocolo.error(req.getRequestId(), "Falta juegoId");
@@ -716,7 +741,8 @@ public class svJuegos {
     /** VER_SALDO: consulta la billetera del usuario autenticado. */
     private MensajeProtocolo verSaldo(MensajeProtocolo req) {
         ValidadorToken.ResultadoValidacion auth = autenticar(req);
-        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(), auth.mensaje());
+        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(),
+                "AUTHENTICATION_FAILED", "Token inválido: " + auth.mensaje());
 
         synchronized (lock) {
             BDJuegos bd = gp.leer();
@@ -734,7 +760,8 @@ public class svJuegos {
     /** AGREGAR_SALDO: solo ADMINISTRADOR puede recargar saldo a cualquier usuario. */
     private MensajeProtocolo agregarSaldo(MensajeProtocolo req) {
         ValidadorToken.ResultadoValidacion auth = autenticar(req);
-        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(), auth.mensaje());
+        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(),
+                "AUTHENTICATION_FAILED", "Token inválido: " + auth.mensaje());
         if (!Constantes.ROL_ADMIN.equals(auth.rol())) {
             return MensajeProtocolo.error(req.getRequestId(), "Acceso denegado");
         }
@@ -769,7 +796,8 @@ public class svJuegos {
     /** VER_HISTORIAL: historial de ventas (ADMINISTRADOR) o del usuario autenticado. */
     private MensajeProtocolo verHistorial(MensajeProtocolo req) {
         ValidadorToken.ResultadoValidacion auth = autenticar(req);
-        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(), auth.mensaje());
+        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(),
+                "AUTHENTICATION_FAILED", "Token inválido: " + auth.mensaje());
 
         synchronized (lock) {
             BDJuegos bd = gp.leer();
@@ -800,7 +828,8 @@ public class svJuegos {
     /** VER_MIS_COMPRAS: juegos comprados por el usuario autenticado. */
     private MensajeProtocolo verMisCompras(MensajeProtocolo req) {
         ValidadorToken.ResultadoValidacion auth = autenticar(req);
-        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(), auth.mensaje());
+        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(),
+                "AUTHENTICATION_FAILED", "Token inválido: " + auth.mensaje());
 
         synchronized (lock) {
             BDJuegos bd = gp.leer();
@@ -821,7 +850,8 @@ public class svJuegos {
     /** VER_MIS_RESERVAS: reservas activas del usuario autenticado. */
     private MensajeProtocolo verMisReservas(MensajeProtocolo req) {
         ValidadorToken.ResultadoValidacion auth = autenticar(req);
-        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(), auth.mensaje());
+        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(),
+                "AUTHENTICATION_FAILED", "Token inválido: " + auth.mensaje());
 
         synchronized (lock) {
             BDJuegos bd = gp.leer();
@@ -848,7 +878,8 @@ public class svJuegos {
     /** VER_MIS_JUEGOS: juegos publicados por el vendedor autenticado. */
     private MensajeProtocolo verMisJuegos(MensajeProtocolo req) {
         ValidadorToken.ResultadoValidacion auth = autenticar(req);
-        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(), auth.mensaje());
+        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(),
+                "AUTHENTICATION_FAILED", "Token inválido: " + auth.mensaje());
 
         synchronized (lock) {
             BDJuegos bd = gp.leer();
@@ -869,7 +900,8 @@ public class svJuegos {
     /** VER_ESTADISTICAS: solo ADMINISTRADOR. */
     private MensajeProtocolo verEstadisticas(MensajeProtocolo req) {
         ValidadorToken.ResultadoValidacion auth = autenticar(req);
-        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(), auth.mensaje());
+        if (!auth.valido()) return MensajeProtocolo.error(req.getRequestId(),
+                "AUTHENTICATION_FAILED", "Token inválido: " + auth.mensaje());
         if (!Constantes.ROL_ADMIN.equals(auth.rol())) {
             return MensajeProtocolo.error(req.getRequestId(), "Acceso denegado");
         }
@@ -906,15 +938,12 @@ public class svJuegos {
 
     private static String uuid() { return UUID.randomUUID().toString(); }
 
-    /** Retorna true si el archivo no existe o tiene tamaño 0. */
-    private void guardarReplicado(BDJuegos bd, String requestId) throws IOException {
-        if (miId != Configuracion.writerNodeId("JUEGOS")) {
-            throw new IOException("Escritura rechazada en nodo secundario de juegos");
-        }
+    private ReplicadorEstado.Resultado guardarReplicado(BDJuegos bd, String requestId) throws IOException {
         gp.guardar(bd);
         ReplicadorEstado.Resultado resultado = replicador.registrarCambioLocal(bd, requestId);
         LOG.info("[REPL] requestId=" + requestId + " version=" + resultado.version()
                 + " confirmada=" + resultado.confirmada());
+        return resultado;
     }
 
     private void guardarReplicadoSinExcepcion(BDJuegos bd, String requestId) {
