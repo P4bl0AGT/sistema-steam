@@ -80,7 +80,7 @@ Cada servicio y cliente mantiene un RelojLamport. tick() al enviar, update() al 
 ### Algoritmo Bully (solo cluster Juegos)
 - Puertos dedicados 9082/9282. Eleccion: ELECTION -> OK -> COORDINATOR
 - Heartbeat cada 5s del no-coordinador al coordinador
-- Si heartbeat falla -> nueva eleccion automatica
+- Si heartbeat falla -> nueva eleccion automatica (loop iterativo, max 5 intentos, sin recursion)
 
 ### Mutex centralizado
 - El coordinador elegido por Bully gestiona locks con lease (15s por defecto)
@@ -88,22 +88,31 @@ Cada servicio y cliente mantiene un RelojLamport. tick() al enviar, update() al 
 - Si el coordinador cae, tras nueva eleccion Bully los locks se reasignan
 
 ### Replicacion de estado
-- Modelo leader-follower: nodo escritor (configurable, default=1) hace PUSH al peer tras cada escritura
+- Modelo leader-follower con failover: nodo escritor (configurable, default=1) hace PUSH al peer tras cada escritura
+- Si el escritor cae, el secundario acepta escrituras automaticamente (detectado via isPeerAlcanzable)
+- Al recuperarse el primario, el sync bidireccional reconcilia: el nodo con version mayor prevalece
 - Nodo secundario hace PULL periodico (cada 5s) para sincronizar
 - Versionado con secuencia monotonica (version = secuencia << 8 | nodoId)
+- registrarCambioLocal: version y snapshot serializados dentro de synchronized, push de red fuera del lock
+- Respuestas de escritura incluyen campo replicaConfirmada (true/false)
 
 ### Persistencia
 - GestorPersistencia: escritura atomica (write temp + rename) en Main.json
-- GestorSnapshot: copia Main -> Copy cada 30s (escalonado entre nodos)
+- GestorSnapshot: lee Main con readAllBytes (atomico) y escribe Copy cada 30s (escalonado entre nodos)
 - Failover: si Main corrupto, promueve Copy automaticamente
 - Cada nodo tiene su propio directorio: data/{servicio}-{nodo}/
+- Pruning automatico: sesiones expiradas se limpian en LOGIN, mensajes entregados >7 dias se eliminan en VER_MENSAJES
 
 ## Seguridad
 - Passwords: PBKDF2-HMAC-SHA256 con sal aleatoria (60k iteraciones)
 - Tokens: UUID aleatorio, TTL 30 min
-- Operaciones de control (SHUTDOWN, REGISTRAR_NODO): firmadas con HMAC-SHA256 usando steam.control.secret
+- Operaciones de control (SHUTDOWN, REGISTRAR_NODO, QUIEN_ES_COORDINADOR, VER_METRICAS_COORD, ESTADO_REPLICACION): firmadas con HMAC-SHA256 usando steam.control.secret
 - Validacion de frescura: timestamp con ventana configurable (60s default)
 - Mensajes Bully/Mutex/Replicacion: firmados con HMAC (firma validada al recibir)
+- Contenido de mensajes de chat limitado a 4096 caracteres
+- LineaJson limita payloads por bytes UTF-8 estimados (no por chars)
+- getDouble/getInt manejan NumberFormatException sin cerrar la conexion
+- Codigos de error auto-inferidos por inferirCodigo() para llamadas legacy al factory 2-param
 
 ## Roles
 - COMPRADOR: comprar juegos, ver saldo, enviar/recibir mensajes
@@ -116,7 +125,7 @@ Cada servicio y cliente mantiene un RelojLamport. tick() al enviar, update() al 
 - 5 juegos con stock=200, billeteras cliente1..50 con $1000
 
 ## Prueba de trafico (rubrica 3)
-GeneradorCarga: N hilos durante M segundos, mezcla de operaciones (50% listar, 20% saldo, 12% mensajes, 13% enviar msg, 5% comprar). FallaInducida mata al coordinador Bully a los T segundos. El reporte (JSON+CSV+SVG) se guarda en evidencia/carga/.
+GeneradorCarga: N hilos durante M segundos, mezcla de operaciones (50% listar, 20% saldo, 12% mensajes, 13% enviar msg, 5% comprar+confirmar). Tras COMPRAR_JUEGO exitoso, ejecuta CONFIRMAR_PAGO automaticamente (prueba compras completas). Login fallido se reintenta cada 500ms y se contabiliza como indisponibilidad+loginsFallidos. FallaInducida mata al coordinador Bully a los T segundos (busca coordinador por soyCoordinador o coordinadorActual). El reporte (JSON+CSV+SVG) se guarda en evidencia/carga/.
 
 ## Tests
 - PruebasComponentes: unit tests de modelos y utilidades
@@ -157,8 +166,8 @@ Las instrucciones y rubricas de evaluacion estan en la raiz del proyecto:
 | 2.2 Lamport | RelojLamport en cada servicio/cliente, orden causal en mensajeria (VER_CONVERSACION) |
 | 2.3 Bully | GestorBully en cluster Juegos (puertos 9082/9282), heartbeat cada 5s, re-eleccion automatica |
 | 2.3 Mutex | GestorMutexCentralizado con lease, coordinador elegido por Bully, protege stock en compras |
-| 2.4 Tolerancia | Heartbeats Bully, WatchdogServidor, GestorPersistencia failover Main->Copy, ReplicadorEstado |
-| 3.1 Carga | GeneradorCarga: 50 hilos/60s, mezcla LISTAR/SALDO/MENSAJES/COMPRAR |
+| 2.4 Tolerancia | Heartbeats Bully, WatchdogServidor (con gracia 60s), failover escritor automatico, GestorPersistencia Main->Copy, ReplicadorEstado bidireccional |
+| 3.1 Carga | GeneradorCarga: 50 hilos/60s, mezcla LISTAR/SALDO/MENSAJES/COMPRAR+CONFIRMAR, reintento de login |
 | 3.2 Metricas | Throughput, p95, mensajes Bully+Mutex (VER_METRICAS_COORD), tasa perdida |
 | 3.3 Falla | FallaInducida + run_coordinator_failure.ps1, mata coordinador a los N segundos |
 | 3.4 Evidencia | reporte-carga.json, resumen.csv, throughput.svg, throughput-por-segundo.csv |

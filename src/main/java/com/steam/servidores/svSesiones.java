@@ -40,7 +40,7 @@ public class svSesiones {
     private final RelojLamport                 relojLamport;
     private final GestorPersistencia<BDSesiones> gp;
     private final ReplicadorEstado<BDSesiones> replicador;
-    private final CacheIdempotencia             idempotencia = new CacheIdempotencia();
+    private final CacheIdempotencia             idempotencia;
     private final ExecutorService              pool   = Ejecutores.acotado("sesiones-worker", Constantes.POOL_SIZE, false);
     private final Object                       lock   = new Object(); // monitor de acceso a BD
     private final Map<String, IntentosLogin>    intentosLogin = new HashMap<>();
@@ -61,6 +61,7 @@ public class svSesiones {
         this.nodo = nodo;
         this.puerto = puerto;
         this.relojLamport = new RelojLamport("SES-" + nodo);
+        this.idempotencia = new CacheIdempotencia(RutasDatos.idempotencia("sesiones", nodo));
         String main = RutasDatos.main("sesiones", nodo);
         String copy = RutasDatos.copy("sesiones", nodo);
         this.gp     = new GestorPersistencia<>(
@@ -100,6 +101,7 @@ public class svSesiones {
         GestorLog.configurar("svSesiones-" + nodo);
 
         svSesiones sv = new svSesiones(nodo, puerto);
+        sv.replicador.setCacheIdempotencia(sv.idempotencia);
         sv.replicador.start();
 
         // ── Snapshot periódico: Main → Copy cada 30s (ambos nodos) ─────────
@@ -513,6 +515,9 @@ public class svSesiones {
         catch (IllegalStateException e) { throw new IOException(e.getMessage(), e); }
         LOG.info("[REPL] lamport=" + relojLamport.tick() + " requestId=" + requestId
                 + " version=" + resultado.version() + " confirmada=" + resultado.confirmada());
+        if (!resultado.confirmada() && replicador.replicaSincronaAplicable()) {
+            throw new IOException("Replica sincrona requerida pero no confirmada");
+        }
         return resultado;
     }
 

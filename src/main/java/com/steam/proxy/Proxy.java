@@ -37,6 +37,7 @@ public class Proxy {
         final int puertoMutex;
         final int puertoReplicacion;
         final AtomicBoolean activo = new AtomicBoolean(false);
+        final AtomicBoolean writerReady = new AtomicBoolean(true);
 
         Nodo(String nombre, String cluster, String host, int puerto, int nodoId,
              int puertoBully, int puertoMutex, int puertoReplicacion) {
@@ -256,6 +257,7 @@ public class Proxy {
         for (int i = 0; i < nodos.size(); i++) {
             Nodo nodo = nodos.get((inicio + i) % nodos.size());
             if (!nodo.activo.get()) continue;
+            if (escritura && !nodo.writerReady.get()) continue;
             algunoActivo = true;
             try {
                 req.setEmisor(nombre);
@@ -326,6 +328,7 @@ public class Proxy {
 
     private void verificarNodo(Nodo nodo) {
         boolean ok = false;
+        boolean ready = true;
         try {
             MensajeProtocolo ping = MensajeProtocolo.request(Constantes.HEALTH_CHECK, null);
             ping.setEmisor(nombre);
@@ -334,11 +337,14 @@ public class Proxy {
             MensajeProtocolo resp = reenviar(ping, nodo);
             reloj.update(resp.getLamportClock());
             ok = resp.isOk();
+            if (ok) ready = !Boolean.FALSE.equals(resp.get("writerReady"));
         } catch (Exception ignored) {}
         boolean anterior = nodo.activo.getAndSet(ok);
+        nodo.writerReady.set(ready);
         if (ok) registrarMembresia(nodo, reloj.tick());
         else membresia.marcarCaido(nodo.id);
-        if (anterior != ok) LOG.info("[HEALTH] " + nodo.nombre + (ok ? " ACTIVO" : " CAIDO"));
+        if (anterior != ok) LOG.info("[HEALTH] " + nodo.nombre + (ok ? " ACTIVO" : " CAIDO")
+                + " writerReady=" + ready);
     }
 
     private synchronized Nodo agregarSiAusente(Nodo candidato) {

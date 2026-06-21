@@ -141,6 +141,7 @@ public class svJuegos {
 
         sv.mutex.startServidor();
         sv.bully.start();          // lanza elección automáticamente
+        sv.replicador.setCacheIdempotencia(sv.idempotencia);
         sv.replicador.start();
         sv.iniciarGestorLocks();
 
@@ -1009,6 +1010,9 @@ public class svJuegos {
         catch (IllegalStateException e) { throw new IOException(e.getMessage(), e); }
         LOG.info("[REPL] lamport=" + relojLamport.tick() + " requestId=" + requestId
                 + " version=" + resultado.version() + " confirmada=" + resultado.confirmada());
+        if (!resultado.confirmada() && replicador.replicaSincronaAplicable()) {
+            throw new IOException("Replica sincrona requerida pero no confirmada");
+        }
         return resultado;
     }
 

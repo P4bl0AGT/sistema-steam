@@ -81,6 +81,7 @@ public class svMensajeria {
         GestorLog.configurar("svMensajeria-" + nodo);
 
         svMensajeria sv = new svMensajeria(nodo, puerto);
+        sv.replicador.setCacheIdempotencia(sv.idempotencia);
         sv.replicador.start();
 
         // ── Snapshot periódico: Main → Copy cada 30s (ambos nodos) ─────────
@@ -413,6 +414,9 @@ public class svMensajeria {
         catch (IllegalStateException e) { throw new IOException(e.getMessage(), e); }
         LOG.info("[REPL] lamport=" + relojLamport.tick() + " requestId=" + requestId
                 + " version=" + resultado.version() + " confirmada=" + resultado.confirmada());
+        if (!resultado.confirmada() && replicador.replicaSincronaAplicable()) {
+            throw new IOException("Replica sincrona requerida pero no confirmada");
+        }
         return resultado;
     }
 

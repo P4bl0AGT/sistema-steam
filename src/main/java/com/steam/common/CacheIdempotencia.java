@@ -152,6 +152,42 @@ public final class CacheIdempotencia {
         }
     }
 
+    public void importarDesdeReplica(CacheIdempotencia peerCache) {
+        if (peerCache == null) return;
+        for (Map.Entry<String, Entrada> item : peerCache.entradas.entrySet()) {
+            Entrada peer = item.getValue();
+            if (!peer.respuesta.isDone()) continue;
+            entradas.putIfAbsent(item.getKey(), peer);
+        }
+        persistirSilencioso();
+    }
+
+    public void importarRequestIds(Map<String, String> requestIdsConHuella) {
+        if (requestIdsConHuella == null) return;
+        long ahora = System.currentTimeMillis();
+        for (Map.Entry<String, String> entry : requestIdsConHuella.entrySet()) {
+            entradas.computeIfAbsent(entry.getKey(), id -> {
+                CompletableFuture<MensajeProtocolo> f = new CompletableFuture<>();
+                f.complete(MensajeProtocolo.error(id, "REQUEST_ALREADY_PROCESSED",
+                        "Operacion ya ejecutada en nodo peer"));
+                return new Entrada(ahora, entry.getValue(), f);
+            });
+        }
+        persistirSilencioso();
+    }
+
+    public Map<String, String> exportarRequestIdsRecientes(long desdeMs) {
+        Map<String, String> resultado = new HashMap<>();
+        long limite = System.currentTimeMillis() - desdeMs;
+        for (Map.Entry<String, Entrada> item : entradas.entrySet()) {
+            Entrada e = item.getValue();
+            if (e.creadaEn >= limite && e.respuesta.isDone()) {
+                resultado.put(item.getKey(), e.huella);
+            }
+        }
+        return resultado;
+    }
+
     private void cargar() {
         if (!Files.exists(archivo)) return;
         try {

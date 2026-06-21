@@ -62,20 +62,21 @@ public class ValidadorToken {
         int writer = Configuracion.writerNodeId("SESIONES");
         int alterno = writer == 1 ? 2 : 1;
         Endpoint[] destinos = { endpointSesiones(writer), endpointSesiones(alterno) };
+        ResultadoValidacion ultimoRechazo = null;
         for (Endpoint destino : destinos) {
             try {
                 MensajeProtocolo resp = enviarYRecibir(req, destino);
                 if (resp != null && resp.isOk()) {
                     ResultadoValidacion resultado = new ResultadoValidacion(
                             true, resp.getString("username"), resp.getString("rol"), "Token válido");
-                    // Guardar en caché solo los tokens válidos
                     cache.put(token, new CachedResult(resultado,
                             System.currentTimeMillis() + TTL_MS));
                     return resultado;
                 }
                 if (resp != null) {
                     if ("AUTHENTICATION_FAILED".equals(resp.getCodigoError())) {
-                        return new ResultadoValidacion(false, null, null, resp.getMensaje());
+                        ultimoRechazo = new ResultadoValidacion(false, null, null, resp.getMensaje());
+                        continue;
                     }
                     LOG.fine("Respuesta transitoria de sesiones " + destino + ": "
                             + resp.getCodigoError());
@@ -84,6 +85,7 @@ public class ValidadorToken {
                 LOG.warning("svSesiones " + destino + " no disponible. " + e.getMessage());
             }
         }
+        if (ultimoRechazo != null) return ultimoRechazo;
         return new ResultadoValidacion(false, null, null, "Servicio de sesiones no disponible");
     }
 

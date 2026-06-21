@@ -20,13 +20,18 @@ public class MensajeReplicacion {
     public long timestamp;
     public String firma;
     public String mensaje;
+    public java.util.Map<String, String> requestIdsRecientes;
 
     private static final Gson GSON = new Gson();
 
     public String contenidoFirmable() {
         String payloadHash = payloadJson == null ? "-" : SeguridadMensajes.sha256Texto(payloadJson);
+        String idsHash = requestIdsRecientes == null || requestIdsRecientes.isEmpty()
+                ? "-" : SeguridadMensajes.sha256Texto(new Gson().toJson(
+                        new java.util.TreeMap<>(requestIdsRecientes)));
         return tipo + "|" + servicio + "|" + nodoOrigen + "|" + version + "|"
-                + requestId + "|" + lamportClock + "|" + timestamp + "|" + payloadHash;
+                + requestId + "|" + lamportClock + "|" + timestamp + "|" + payloadHash
+                + "|" + idsHash;
     }
 
     public void firmar() { firma = SeguridadMensajes.firmarTexto(contenidoFirmable()); }
