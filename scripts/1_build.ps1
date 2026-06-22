@@ -17,7 +17,10 @@ if (-not (Test-Path $gson)) {
     New-Item -ItemType Directory -Force (Split-Path $gson) | Out-Null
     Invoke-WebRequest 'https://repo1.maven.org/maven2/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar' -OutFile $gson
 }
-$hashActual = (Get-FileHash $gson -Algorithm SHA256).Hash.ToLowerInvariant()
+$hashActual = ([System.BitConverter]::ToString(
+    [System.Security.Cryptography.SHA256]::Create().ComputeHash(
+        [System.IO.File]::ReadAllBytes($gson)
+    )) -replace '-','').ToLowerInvariant()
 if ($hashActual -ne $gsonSha256) {
     throw "Gson 2.10.1 no coincide con el SHA-256 esperado: $hashActual"
 }

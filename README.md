@@ -230,11 +230,11 @@ Equivale a:
 .\scripts\10_run_generador_carga.ps1 -Hilos 50 -DuracionSeg 60
 ```
 
-El generador realiza login con 50 compradores y mezcla operaciones de catálogo, saldo, mensajes, recepción y reservas a través de ambos proxies. Separa éxitos, errores de negocio, errores de sistema, indisponibilidad y pérdidas de transporte mediante `codigoError`. También muestrea periódicamente Bully y mutex para conservar el último contador conocido si un nodo cae o reinicia.
+El generador realiza login con 50 compradores y mezcla operaciones de catálogo, saldo, mensajes, recepción y compras completas (COMPRAR_JUEGO + CONFIRMAR_PAGO) a través de ambos proxies. Los logins fallidos se reintentan cada 500ms y se contabilizan como indisponibilidad (`loginsFallidos`). Separa éxitos, errores de negocio, errores de sistema, indisponibilidad y pérdidas de transporte mediante `codigoError`. También muestrea periódicamente Bully y mutex (con firma HMAC) para conservar el último contador conocido si un nodo cae o reinicia.
 
 Produce:
 
-- `reporte-carga.json`
+- `reporte-carga.json` (metricas completas incluyendo loginsFallidos y desglose por codigoError)
 - `resumen.csv`
 - `metricas-por-fase.csv` (normal, falla y recuperacion)
 - `throughput-por-segundo.csv`
@@ -244,15 +244,25 @@ Los archivos quedan bajo `evidencia/carga/<fecha>/`.
 
 ## Consistencia de escrituras
 
-Cada servicio tiene un escritor preferido configurado (`steam.<servicio>.writer.node`, nodo 1 por defecto). Si deja de responder durante `steam.writer.failover.ms`, el secundario reconciliado se promueve y el Proxy reintenta allí las escrituras con el mismo `requestId`. Por defecto, las lecturas prefieren el writer para conservar read-your-writes y pueden degradar a la replica.
+Cada servicio tiene un escritor preferido configurado (`steam.<servicio>.writer.node`, nodo 1 por defecto). Si deja de responder durante `steam.writer.failover.ms` (default 8s), el secundario se promueve (con incremento de epoca) y el Proxy redirige allí las escrituras. Por defecto, las lecturas prefieren el writer para conservar read-your-writes y pueden degradar a la replica.
 
-Al arrancar, el writer permanece sin aceptar escrituras hasta reconciliar su versión con el peer. Los ACK de réplica deben coincidir exactamente en servicio, peer, `requestId` y versión. Las versiones incluyen el identificador del nodo emisor y el snapshot lleva esa misma versión embebida. Cuando vuelve el preferido, el secundario se despromueve y el preferido aplica primero la versión mas reciente.
+### Fencing y reconciliacion
 
-La promoción mantiene el servicio disponible ante un crash observable y la replicación converge mediante snapshots completos versionados. No es consenso: con solo dos replicas una partición simétrica no permite garantizar simultáneamente disponibilidad y ausencia absoluta de split-brain.
+Al arrancar o recuperarse, el writer permanece sin aceptar escrituras (`listoParaEscrituras=false`) hasta reconciliar su versión con el peer. Los ACK de réplica deben coincidir exactamente en servicio, peer, `requestId` y versión. Cuando el preferido reconecta y detecta que el peer tiene versión mayor (FENCE), aplica el estado remoto inmediatamente y se habilita para escrituras (RECONCILED). El secundario se despromueve (DEMOTE) al detectar que el preferido esta de vuelta.
 
-Juegos y mensajería guardan antes de cada escritura un marcador idempotente local y conservan la respuesta durante 30 días. Si una JVM se reinicia con una operación en curso, el reintento devuelve `REQUEST_OUTCOME_UNKNOWN` en vez de repetir silenciosamente el efecto.
+El Proxy consulta el campo `writerReady` del health check y no envía escrituras a nodos que estan reconciliando. Esto evita lecturas obsoletas durante la transición.
 
-Bully recupera al coordinador ante un crash observable. El failover del writer usa el mismo modelo de falla por timeout; la limitación de particiones de una topología de dos nodos debe explicarse en el informe.
+### Idempotencia cross-nodo
+
+Los tres servicios (sesiones, juegos, mensajería) persisten un marcador idempotente local (`IDEMPOTENCIA.json`) y conservan la respuesta durante 30 días. Los requestIds procesados se replican entre nodos via el campo `requestIdsRecientes` del PUSH, protegido por HMAC. Si una JVM se reinicia con una operación en curso, el reintento devuelve `REQUEST_OUTCOME_UNKNOWN`. Si el requestId ya fue procesado en el otro nodo, retorna `REQUEST_ALREADY_PROCESSED`.
+
+### Replicacion sincrona (opcional)
+
+Con `steam.replication.sync.required=true`, las escrituras fallan si la réplica no confirma (solo cuando el peer esta alcanzable). Si el peer esta caido, las escrituras se permiten sin confirmación para no bloquear el failover.
+
+### Limitaciones conocidas
+
+La promoción mantiene el servicio disponible ante un crash observable y la replicación converge mediante snapshots completos versionados. No es consenso: con solo dos réplicas una partición simétrica no permite garantizar simultáneamente disponibilidad y ausencia absoluta de split-brain. Bully recupera al coordinador ante un crash observable; la limitación de particiones de una topología de dos nodos debe explicarse en el informe.
 
 La evidencia compacta validada está en `evidencia/final-50x60-validada/`. La corrida registrada obtuvo:
 
@@ -280,6 +290,21 @@ Para compilar, reiniciar datos, ejecutar carga 50×60, derribar el coordinador d
   -DuracionSeg 60 `
   -FallaEnSeg 20
 ```
+
+## Seguridad
+
+| Mecanismo | Detalle |
+|-----------|---------|
+| Passwords | PBKDF2-HMAC-SHA256 con sal aleatoria (60k iteraciones) |
+| Tokens | UUID aleatorio, TTL configurable (default 30 min) |
+| Operaciones de control | Firmadas con HMAC-SHA256 (`steam.control.secret`) |
+| Endpoints protegidos | SHUTDOWN, REGISTRAR_NODO, QUIEN_ES_COORDINADOR, VER_METRICAS_COORD, ESTADO_REPLICACION |
+| Mensajes Bully/Mutex/Replicacion | Firmados con HMAC + validacion de frescura |
+| Idempotencia | requestId + huella; replicada entre nodos via PUSH firmado |
+| Mensajes de chat | Limitados a 4096 caracteres |
+| Payloads TCP | Limitados por bytes UTF-8 estimados (`steam.max.message.bytes`) |
+| Parsing numerico | getDouble/getInt capturan NumberFormatException sin cerrar conexion |
+| Codigos de error | Auto-inferidos por `inferirCodigo()` para llamadas legacy |
 
 ## TLS y mTLS
 
@@ -318,6 +343,20 @@ $env:STEAM_DEMO_MODE = 'false'
 Con modo demo desactivado, el sistema no arranca sin `STEAM_CONTROL_SECRET` (o la propiedad JVM equivalente). La firma de control cubre el sobre y el payload canónico completos; Bully, mutex y replicación conservan firmas específicas.
 El modo demo rechaza además cualquier `steam.bind.host` que no sea loopback.
 Las sesiones tienen vida absoluta configurada por `steam.token.ttl.ms`; validarlas no renueva el vencimiento. Los tokens nuevos se persisten como SHA-256 y el login bloquea temporalmente un usuario después de cinco fallos en un minuto.
+
+## Tolerancia a fallos
+
+| Mecanismo | Implementacion |
+|-----------|---------------|
+| Heartbeat Bully | Cada 5s; timeout 3s dispara re-eleccion iterativa (max 5 intentos) |
+| Failover de escritor | Secundario se promueve tras 8s sin contacto; fencing por epoca |
+| Reconciliacion | Primario aplica estado remoto inmediatamente al reconectar (FENCE → RECONCILED) |
+| Watchdog | Health check cada 15s; reinicia tras 3 fallos consecutivos; 60s de gracia post-reinicio |
+| Persistencia | Escritura atomica (temp + rename); failover Main → Copy automatico |
+| Snapshot | readAllBytes atomico cada 30s (escalonado entre nodos) |
+| Proxy | Health check cada 10s; failover de escrituras a nodos activos; respeta writerReady |
+| ValidadorToken | Intenta ambos nodos de sesiones antes de rechazar un token |
+| Pruning automatico | Sesiones expiradas limpiadas en LOGIN; mensajes entregados >7 dias en VER_MENSAJES |
 
 ## Arranque manual por ventanas
 

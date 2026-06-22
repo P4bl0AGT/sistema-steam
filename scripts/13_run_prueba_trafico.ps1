@@ -45,9 +45,14 @@ try {
     $membershipDir = Join-Path $evidencePath 'membresia'
     New-Item -ItemType Directory -Force $membershipDir | Out-Null
     Copy-Item 'data\proxy-1\MEMBRESIA.json','data\proxy-2\MEMBRESIA.json' -Destination $membershipDir
-    $hashes = Get-FileHash 'data\sesiones-1\Main.json','data\sesiones-2\Main.json',
+    $archivos = @('data\sesiones-1\Main.json','data\sesiones-2\Main.json',
         'data\juegos-1\Main.json','data\juegos-2\Main.json',
-        'data\mensajeria-1\Main.json','data\mensajeria-2\Main.json' -Algorithm SHA256
+        'data\mensajeria-1\Main.json','data\mensajeria-2\Main.json')
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $hashes = $archivos | Where-Object { Test-Path $_ } | ForEach-Object {
+        $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path $_))
+        [pscustomobject]@{ Path=$_; Hash=([BitConverter]::ToString($sha.ComputeHash($bytes)) -replace '-','') }
+    }
     $hashes | Format-Table -AutoSize | Out-String | Set-Content (Join-Path $evidencePath 'hashes-replicas.txt')
     & cmd.exe /c 'java -version 2>&1' | Set-Content (Join-Path $evidencePath 'java-version.txt')
     git rev-parse HEAD 2>&1 | Set-Content (Join-Path $evidencePath 'git-head.txt')
